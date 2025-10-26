@@ -23,6 +23,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "ui/text/text_utilities.h" // Ui::Text::ToUpper
 #include "boxes/connection_box.h"
 #include "boxes/enhanced_options_box.h"
+#include "boxes/message_filter_box.h"
 #include "boxes/about_box.h"
 #include "ui/boxes/confirm_box.h"
 #include "platform/platform_specific.h"
@@ -119,7 +120,9 @@ namespace Settings {
 		}).send();
 	}
 
-	void Enhanced::SetupEnhancedMessages(not_null<Ui::VerticalLayout *> container) {
+	void Enhanced::SetupEnhancedMessages(
+		not_null<Window::SessionController*> controller,
+		not_null<Ui::VerticalLayout *> container) {
 		AddDivider(container);
 		AddSkip(container);
 		AddSubsectionTitle(container, tr::lng_settings_messages());
@@ -129,6 +132,15 @@ namespace Settings {
 						container,
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
+
+		// Message Filters Button
+		AddButtonWithIcon(
+			inner,
+			tr::lng_settings_message_filters(),
+			st::settingsButtonNoIcon
+		)->addClickHandler([=] {
+			controller->show(Box<MessageFilterListBox>(controller));
+		});
 
 		auto MsgIdBtn = AddButtonWithIcon(
 				inner,
@@ -186,16 +198,16 @@ namespace Settings {
 		});
 
 		auto btn = AddButtonWithLabel(
-				container,
+				inner,
 				tr::lng_settings_always_delete_for(),
 				std::move(value),
 				st::settingsButtonNoIcon
 		);
 		btn->events(
-		) | rpl::start_with_next([=](not_null<QEvent*> e) {
+		) | rpl::start_with_next([=, this](not_null<QEvent*> e) {
 			const auto event = e->type();
 			if (event == QEvent::UpdateLater) _AlwaysDeleteChanged.fire({});
-		}, container->lifetime());
+		}, inner->lifetime());
 		btn->addClickHandler([=] {
 			Ui::show(Box<AlwaysDeleteBox>());
 		});
@@ -346,7 +358,7 @@ namespace Settings {
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
 			return (toggled != GetEnhancedBool("blocked_user_spoiler_mode"));
-		}) | rpl::start_with_next([=](bool toggled) {
+		}) | rpl::start_with_next([=, this](bool toggled) {
 			SetEnhancedValue("blocked_user_spoiler_mode", toggled);
 			EnhancedSettings::Write();
 			if (toggled) {
@@ -354,7 +366,7 @@ namespace Settings {
 
 				App::wnd()->sessionController()->session().api().blockedPeers().slice() | rpl::take(
 					1
-				) | rpl::start_with_next([&](const Api::BlockedPeers::Slice &result) {
+				) | rpl::start_with_next([=, this](const Api::BlockedPeers::Slice &result) {
 					if (blockList.length() == result.total) {
 						return;
 					}
@@ -614,7 +626,7 @@ namespace Settings {
 		const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 
 		SetupEnhancedNetwork(content);
-		SetupEnhancedMessages(content);
+		SetupEnhancedMessages(controller, content);
 		SetupEnhancedButton(content);
 		SetupEnhancedVoiceChat(content);
 		SetupEnhancedOthers(controller, content);
