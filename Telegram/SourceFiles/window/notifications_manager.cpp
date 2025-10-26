@@ -29,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document.h"
 #include "data/data_poll.h"
 #include "base/unixtime.h"
+#include "core/enhanced_settings.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
 #include "core/application.h"
@@ -337,6 +338,38 @@ System::SkipState System::computeSkipState(
 	}
 	if (notifyBy) {
 		notifySettings->request(notifyBy);
+	}
+
+	// Check soft mute before regular mute
+	if (messageType) {
+		const auto peerId = thread->peer()->id.value;
+		auto softMute = EnhancedSettings::GetSoftMuteState(peerId);
+		if (softMute.enabled) {
+			const auto now = base::unixtime::now();
+
+			// If this is the first message (lastNotificationTime == 0), allow it and set timestamp
+			if (softMute.lastNotificationTime == 0) {
+				EnhancedSettings::UpdateSoftMuteLastNotification(peerId, now);
+				// Continue to process normally - allow this first notification
+			} else {
+				const auto elapsed = now - softMute.lastNotificationTime;
+
+				if (elapsed < softMute.period) {
+					// Within soft mute window - suppress based on mode
+					if (softMute.suppressionMode == 0) {
+						// Silent mode: show badge/count but no popup/sound
+						return withSilent(SkipState::DontSkip, true);
+					} else {
+						// Totally hidden mode: skip completely
+						return { SkipState::Skip };
+					}
+				} else {
+					// Past window - allow notification and update timestamp
+					EnhancedSettings::UpdateSoftMuteLastNotification(peerId, now);
+					// Continue to process normally
+				}
+			}
+		}
 	}
 
 	if (messageType && notifySettings->muteUnknown(thread)) {
