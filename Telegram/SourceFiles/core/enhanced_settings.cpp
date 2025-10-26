@@ -21,6 +21,9 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include <QtCore/QJsonValue>
 
 namespace EnhancedSettings {
+	// Global soft mute storage
+	QMap<uint64, SoftMuteState> gSoftMuteSettings;
+
 	namespace {
 
 		constexpr auto kWriteJsonTimeout = crl::time(5000);
@@ -219,6 +222,31 @@ namespace EnhancedSettings {
 			}
 		});
 
+		// Load soft mute settings
+		ReadObjectOption(settings, "soft_mute_settings", [&](const QJsonObject &softMuteObj) {
+			gSoftMuteSettings.clear();
+			for (auto it = softMuteObj.constBegin(); it != softMuteObj.constEnd(); ++it) {
+				const auto peerIdStr = it.key();
+				const auto peerId = peerIdStr.toULongLong();
+
+				if (!it.value().isObject()) continue;
+				const auto stateObj = it.value().toObject();
+
+				SoftMuteState state;
+				state.enabled = stateObj.value("enabled").toBool();
+				state.period = stateObj.value("period").toInt();
+				state.lastNotificationTime = stateObj.value("last_notification").toVariant().toLongLong();
+				state.suppressionMode = stateObj.value("suppression_mode").toInt();
+
+				gSoftMuteSettings.insert(peerId, state);
+			}
+		});
+
+		// Load soft mute default mode
+		ReadIntOption(settings, "soft_mute_default_mode", [&](int mode) {
+			SetEnhancedValue("soft_mute_default_mode", mode);
+		});
+
 		return true;
 	}
 
@@ -375,6 +403,25 @@ namespace EnhancedSettings {
 		settings.insert(qsl("screenshot_mode"), GetEnhancedBool("screenshot_mode"));
 		settings.insert(qsl("update_url"), GetEnhancedString("update_url"));
 
+		// Write soft mute settings
+		auto softMuteObj = QJsonObject();
+		for (auto it = gSoftMuteSettings.constBegin(); it != gSoftMuteSettings.constEnd(); ++it) {
+			const auto peerId = it.key();
+			const auto &state = it.value();
+
+			auto stateObj = QJsonObject();
+			stateObj.insert(qsl("enabled"), state.enabled);
+			stateObj.insert(qsl("period"), state.period);
+			stateObj.insert(qsl("last_notification"), QString::number(state.lastNotificationTime));
+			stateObj.insert(qsl("suppression_mode"), state.suppressionMode);
+
+			softMuteObj.insert(QString::number(peerId), stateObj);
+		}
+		settings.insert(qsl("soft_mute_settings"), softMuteObj);
+
+		// Write soft mute default mode
+		settings.insert(qsl("soft_mute_default_mode"), GetEnhancedInt("soft_mute_default_mode"));
+
 		auto document = QJsonDocument();
 		document.setObject(settings);
 		file.write(document.toJson(QJsonDocument::Indented));
@@ -405,6 +452,32 @@ namespace EnhancedSettings {
 		if (!Data) return;
 
 		Data->write(true);
+	}
+
+	// Soft mute management implementation
+	SoftMuteState GetSoftMuteState(uint64 peerId) {
+		return gSoftMuteSettings.value(peerId, SoftMuteState{});
+	}
+
+	void SetSoftMuteState(uint64 peerId, const SoftMuteState &state) {
+		if (state.enabled) {
+			gSoftMuteSettings.insert(peerId, state);
+		} else {
+			gSoftMuteSettings.remove(peerId);
+		}
+		Write();
+	}
+
+	void UpdateSoftMuteLastNotification(uint64 peerId, int64 timestamp) {
+		if (gSoftMuteSettings.contains(peerId)) {
+			gSoftMuteSettings[peerId].lastNotificationTime = timestamp;
+			Write();
+		}
+	}
+
+	void RemoveSoftMute(uint64 peerId) {
+		gSoftMuteSettings.remove(peerId);
+		Write();
 	}
 
 } // namespace EnhancedSettings

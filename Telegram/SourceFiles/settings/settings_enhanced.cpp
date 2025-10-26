@@ -497,6 +497,25 @@ namespace Settings {
 		AddSkip(container);
 		AddSubsectionTitle(container, tr::lng_settings_other());
 
+		// Soft Mute Suppression Mode - simple toggle button
+		AddButtonWithIcon(
+			container,
+			tr::lng_settings_soft_mute_mode(),
+			st::settingsButtonNoIcon
+		)->toggleOn(
+			rpl::single(GetEnhancedInt("soft_mute_default_mode") == 1)
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled ? 1 : 0) != GetEnhancedInt("soft_mute_default_mode");
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("soft_mute_default_mode", toggled ? 1 : 0);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
+		AddDividerText(container, rpl::single(
+			tr::lng_settings_soft_mute_mode_silent(tr::now) + " / " +
+			tr::lng_settings_soft_mute_mode_hidden(tr::now)));
+
 		auto hideBtn = AddButtonWithIcon(
 			container,
 			tr::lng_settings_hide_all_chats(),

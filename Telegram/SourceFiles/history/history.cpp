@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_translation.h"
 #include "history/history_unread_things.h"
 #include "core/ui_integration.h"
+#include "core/enhanced_settings.h"
 #include "dialogs/ui/dialogs_layout.h"
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/scheduled_messages.h"
@@ -2067,6 +2068,14 @@ void History::setUnreadCount(int newUnreadCount) {
 		_firstUnreadView = nullptr;
 		if (const auto last = msgIdForRead()) {
 			setInboxReadTill(last);
+		}
+
+		// Reset soft mute counter when user reads all messages
+		const auto peerId = peer->id.value;
+		auto softMute = EnhancedSettings::GetSoftMuteState(peerId);
+		if (softMute.enabled && softMute.lastNotificationTime != 0) {
+			// Reset to 0 so next message will trigger notification
+			EnhancedSettings::UpdateSoftMuteLastNotification(peerId, 0);
 		}
 	} else if (!_firstUnreadView && !_unreadBarView && loadedAtBottom()) {
 		calculateFirstUnreadMessage();
