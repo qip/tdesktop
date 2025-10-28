@@ -82,5 +82,8 @@ private:
 	object_ptr<Ui::Checkbox> _enabled = {nullptr};
 	std::shared_ptr<Ui::RadiobuttonGroup> _modeGroup;
 	std::shared_ptr<Ui::RadiobuttonGroup> _displayGroup;
+	Ui::FlatLabel *_displayLabel = nullptr;
+	Ui::Radiobutton *_displayHideBtn = nullptr;
+	Ui::Radiobutton *_displayDimBtn = nullptr;
 };
 

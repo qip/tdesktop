@@ -347,33 +347,33 @@ void MessageFilterEditBox::prepare() {
 	});
 
 	// Display mode radio buttons
-	auto displayLabel = Ui::CreateChild<Ui::FlatLabel>(
+	_displayLabel = Ui::CreateChild<Ui::FlatLabel>(
 		this,
 		tr::lng_filter_display(tr::now),
 		st::boxLabel);
-	displayLabel->moveToLeft(st::boxPadding.left(), y);
-	y += displayLabel->height() + st::boxLittleSkip;
+	_displayLabel->moveToLeft(st::boxPadding.left(), y);
+	y += _displayLabel->height() + st::boxLittleSkip;
 
 	_displayGroup = std::make_shared<Ui::RadiobuttonGroup>(
 		static_cast<int>(_filter.displayMode));
 
-	auto hideBtn = Ui::CreateChild<Ui::Radiobutton>(
+	_displayHideBtn = Ui::CreateChild<Ui::Radiobutton>(
 		this,
 		_displayGroup,
 		static_cast<int>(MessageFilters::FilterDisplayMode::Hide),
 		tr::lng_filter_display_hide(tr::now),
 		st::defaultCheckbox);
-	hideBtn->moveToLeft(st::boxPadding.left(), y);
-	y += hideBtn->heightNoMargins() + st::boxLittleSkip;
+	_displayHideBtn->moveToLeft(st::boxPadding.left(), y);
+	y += _displayHideBtn->heightNoMargins() + st::boxLittleSkip;
 
-	auto dimBtn = Ui::CreateChild<Ui::Radiobutton>(
+	_displayDimBtn = Ui::CreateChild<Ui::Radiobutton>(
 		this,
 		_displayGroup,
 		static_cast<int>(MessageFilters::FilterDisplayMode::Dim),
 		tr::lng_filter_display_dim(tr::now),
 		st::defaultCheckbox);
-	dimBtn->moveToLeft(st::boxPadding.left(), y);
-	y += dimBtn->heightNoMargins() + st::boxMediumSkip;
+	_displayDimBtn->moveToLeft(st::boxPadding.left(), y);
+	y += _displayDimBtn->heightNoMargins() + st::boxMediumSkip;
 
 	// Enabled checkbox
 	_enabled.create(
@@ -568,8 +568,16 @@ void MessageFilterEditBox::updateModeState() {
 	// Show replacement text field only when Replace mode is selected
 	if (isReplace) {
 		_replacementText->show();
+		// Hide display mode options when Replace mode is selected
+		_displayLabel->hide();
+		_displayHideBtn->hide();
+		_displayDimBtn->hide();
 	} else {
 		_replacementText->hide();
+		// Show display mode options for Whitelist and Blacklist modes
+		_displayLabel->show();
+		_displayHideBtn->show();
+		_displayDimBtn->show();
 	}
 	
 	// Force layout update

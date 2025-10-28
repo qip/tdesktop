@@ -1139,7 +1139,6 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	// Check message filters for special display modes
 	const auto filterResult = MessageFilters::CheckMessageAgainstFilters(item);
 	auto filterDimMode = false;
-	auto filterReplaced = false;
 	if (filterResult.filtered) {
 		if (filterResult.displayMode == MessageFilters::FilterDisplayMode::Hide) {
 			return; // Hide completely
@@ -1148,9 +1147,6 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			p.setOpacity(0.3);
 			filterDimMode = true;
 		}
-	} else if (filterResult.isReplaced) {
-		// Replace mode: will draw replaced text overlay after normal rendering
-		filterReplaced = true;
 	}
 
 	if (isHidden()) {
@@ -1636,23 +1632,6 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	// Restore opacity if dim mode was applied
 	if (filterDimMode) {
 		p.setOpacity(1.0);
-	}
-
-	// Draw replaced text overlay if Replace mode was applied
-	if (filterReplaced && !filterResult.replacedText.isEmpty()) {
-		p.save();
-		p.setPen(stm->msgServiceFg);
-		p.setFont(st::msgFont);
-
-		// Draw semi-transparent background
-		const auto textRect = QRect(g.left() + 10, g.top() + 10, g.width() - 20, g.height() - 20);
-		p.setOpacity(0.9);
-		p.fillRect(textRect, stm->msgBg);
-
-		// Draw replaced text
-		p.setOpacity(1.0);
-		p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::TextWordWrap, filterResult.replacedText);
-		p.restore();
 	}
 
 	if (selectionTranslation) {
