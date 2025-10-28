@@ -16,8 +16,6 @@ namespace MessageFilters {
 struct FilterResult {
 	bool filtered = false;
 	FilterDisplayMode displayMode = FilterDisplayMode::Hide;
-	QString replacedText; // For Replace mode: the text with replacements applied
-	bool isReplaced = false; // True if Replace mode was applied
 };
 
 [[nodiscard]] FilterResult CheckMessageAgainstFilters(

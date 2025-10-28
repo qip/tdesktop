@@ -19,10 +19,16 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 namespace MessageFilters {
 
 FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
+	// Skip service messages - they don't have regular text
+	if (item->isService()) {
+		return { false, FilterDisplayMode::Hide };
+	}
+	
 	const auto filters = EnhancedSettings::GetMessageFilters();
 	
 	if (filters.isEmpty()) {
-		return { false, FilterDisplayMode::Hide, QString(), false };
+		item->clearFilterReplacement();
+		return { false, FilterDisplayMode::Hide };
 	}
 	
 	// Sort by order (only if needed)
@@ -70,6 +76,7 @@ FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 				if (match.hasMatch()) {
 					regexMatches = true;
 					if (filter.mode == FilterMode::Replace) {
+						// Prepare replacement text
 						replacedText = text;
 						replacedText.replace(regex, filter.replacementText);
 					}
@@ -83,21 +90,29 @@ FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 		// Apply filter based on mode
 		if (matches) {
 			if (filter.mode == FilterMode::Blacklist) {
-				return { true, filter.displayMode, QString(), false };
+				item->clearFilterReplacement();
+				return { true, filter.displayMode };
 			} else if (filter.mode == FilterMode::Replace) {
-				return { false, FilterDisplayMode::Hide, replacedText, true };
+				// Apply the replacement now that all conditions are confirmed
+				if (!replacedText.isEmpty()) {
+					item->setFilterReplacement({ replacedText, {} });
+				}
+				return { false, FilterDisplayMode::Hide };
 			} else {
 				// Whitelist: show this message
-				return { false, FilterDisplayMode::Hide, QString(), false };
+				item->clearFilterReplacement();
+				return { false, FilterDisplayMode::Hide };
 			}
 		} else if (filter.mode == FilterMode::Whitelist) {
 			// Whitelist: message doesn't match, hide it
-			return { true, FilterDisplayMode::Hide, QString(), false };
+			item->clearFilterReplacement();
+			return { true, FilterDisplayMode::Hide };
 		}
 	}
 
-	// No filters matched, show the message
-	return { false, FilterDisplayMode::Hide, QString(), false };
+	// No filters matched, clear any previous replacement and show the message
+	item->clearFilterReplacement();
+	return { false, FilterDisplayMode::Hide };
 }
 
 bool ShouldSuppressNotification(not_null<HistoryItem*> item) {

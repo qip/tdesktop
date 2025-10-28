@@ -457,6 +457,9 @@ public:
 	bool translationShowRequiresRequest(LanguageId to);
 	void translationDone(LanguageId to, TextWithEntities result);
 
+	void setFilterReplacement(TextWithEntities replacement);
+	void clearFilterReplacement();
+
 	[[nodiscard]] bool canReact() const;
 	void toggleReaction(
 		const Data::ReactionId &reaction,

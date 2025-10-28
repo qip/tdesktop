@@ -2943,6 +2943,27 @@ void HistoryItem::translationDone(LanguageId to, TextWithEntities result) {
 	}
 }
 
+void HistoryItem::setFilterReplacement(TextWithEntities replacement) {
+	if (isService() || replacement.text.isEmpty()) {
+		return;
+	}
+	if (!Get<HistoryMessageFilterReplacement>()) {
+		AddComponents(HistoryMessageFilterReplacement::Bit());
+	}
+	const auto filterReplacement = Get<HistoryMessageFilterReplacement>();
+	if (filterReplacement->text.text != replacement.text) {
+		filterReplacement->text = std::move(replacement);
+		_history->owner().requestItemTextRefresh(this);
+	}
+}
+
+void HistoryItem::clearFilterReplacement() {
+	if (const auto filterReplacement = Get<HistoryMessageFilterReplacement>()) {
+		filterReplacement->text = TextWithEntities();
+		_history->owner().requestItemTextRefresh(this);
+	}
+}
+
 bool HistoryItem::canReact() const {
 	if (!isRegular()) {
 		return false;
@@ -3274,14 +3295,21 @@ const TextWithEntities &HistoryItem::translatedText() const {
 	if (isService()) {
 		static const auto kEmpty = TextWithEntities();
 		return kEmpty;
-	} else if (const auto translation = this->translation()
+	} else if (const auto replacement = Get<HistoryMessageFilterReplacement>()) {
+		// Filter replacement takes priority over translation (if not empty)
+		if (!replacement->text.text.isEmpty()) {
+			return replacement->text;
+		}
+	}
+	
+	if (const auto translation = this->translation()
 		; translation
 		&& translation->used
 		&& (translation->to == history()->translatedTo())) {
 		return translation->text;
-	} else {
-		return originalText();
 	}
+	
+	return originalText();
 }
 
 TextWithEntities HistoryItem::translatedTextWithLocalEntities() const {
