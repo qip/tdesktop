@@ -63,6 +63,11 @@ jobs:
         shell: cmd
 
     steps:
+      - name: Check secrets present
+        run: |
+          if "%TDESKTOP_API_ID%"=="" (echo Missing TDESKTOP_API_ID & exit /b 1)
+          if "%TDESKTOP_API_HASH%"=="" (echo Missing TDESKTOP_API_HASH & exit /b 1)
+
       - name: Prepare directories.
         run: |
           mkdir %userprofile%\TBuild\Libraries
