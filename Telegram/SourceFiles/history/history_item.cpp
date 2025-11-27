@@ -2944,9 +2944,29 @@ void HistoryItem::translationDone(LanguageId to, TextWithEntities result) {
 }
 
 void HistoryItem::setFilterReplacement(TextWithEntities replacement) {
+	// Don't set replacement for service messages or if text is empty
 	if (isService() || replacement.text.isEmpty()) {
 		return;
 	}
+	// Don't set replacement if original text is empty (media without caption)
+	if (_text.text.isEmpty()) {
+		return;
+	}
+	
+	// Sanitize entities - remove any that are out of bounds
+	const auto textLength = replacement.text.length();
+	replacement.entities.erase(
+		std::remove_if(
+			replacement.entities.begin(),
+			replacement.entities.end(),
+			[textLength](const EntityInText &e) {
+				return e.length() <= 0
+					|| e.offset() < 0
+					|| e.offset() >= textLength
+					|| (e.offset() + e.length()) > textLength;
+			}),
+		replacement.entities.end());
+	
 	if (!Get<HistoryMessageFilterReplacement>()) {
 		AddComponents(HistoryMessageFilterReplacement::Bit());
 	}
@@ -2958,8 +2978,8 @@ void HistoryItem::setFilterReplacement(TextWithEntities replacement) {
 }
 
 void HistoryItem::clearFilterReplacement() {
-	if (const auto filterReplacement = Get<HistoryMessageFilterReplacement>()) {
-		filterReplacement->text = TextWithEntities();
+	if (Has<HistoryMessageFilterReplacement>()) {
+		RemoveComponents(HistoryMessageFilterReplacement::Bit());
 		_history->owner().requestItemTextRefresh(this);
 	}
 }
@@ -3295,9 +3315,12 @@ const TextWithEntities &HistoryItem::translatedText() const {
 	if (isService()) {
 		static const auto kEmpty = TextWithEntities();
 		return kEmpty;
-	} else if (const auto replacement = Get<HistoryMessageFilterReplacement>()) {
-		// Filter replacement takes priority over translation (if not empty)
-		if (!replacement->text.text.isEmpty()) {
+	}
+	
+	// Check for filter replacement - only for regular messages with actual text
+	if (!emptyText() && Has<HistoryMessageFilterReplacement>()) {
+		const auto replacement = Get<HistoryMessageFilterReplacement>();
+		if (replacement && !replacement->text.text.isEmpty()) {
 			return replacement->text;
 		}
 	}

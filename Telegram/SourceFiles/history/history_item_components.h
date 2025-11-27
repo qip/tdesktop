@@ -384,11 +384,6 @@ struct HistoryMessageTranslation
 	bool used = false;
 };
 
-struct HistoryMessageFilterReplacement
-: RuntimeComponent<HistoryMessageFilterReplacement, HistoryItem> {
-	TextWithEntities text;
-};
-
 struct HistoryMessageReplyMarkup
 : RuntimeComponent<HistoryMessageReplyMarkup, HistoryItem> {
 	using Button = HistoryMessageMarkupButton;
@@ -873,4 +868,10 @@ private:
 	mutable int _seekingStart = 0;
 	mutable int _seekingCurrent = 0;
 
+};
+
+// Filter replacement - must be at the END to not disrupt existing component bit positions
+struct HistoryMessageFilterReplacement
+: RuntimeComponent<HistoryMessageFilterReplacement, HistoryItem> {
+	TextWithEntities text;
 };

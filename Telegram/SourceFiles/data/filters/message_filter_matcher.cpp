@@ -26,6 +26,11 @@ TextWithEntities ReplaceTextWithEntities(
 		const TextWithEntities &original,
 		const QRegularExpression &regex,
 		const QString &replacement) {
+	// Safety check: don't process empty text
+	if (original.text.isEmpty()) {
+		return original;
+	}
+	
 	auto result = original;
 	auto &text = result.text;
 	auto &entities = result.entities;
@@ -36,6 +41,11 @@ TextWithEntities ReplaceTextWithEntities(
 	auto it = regex.globalMatch(text);
 	while (it.hasNext()) {
 		matches.append(it.next());
+	}
+	
+	// No matches found, return original unchanged
+	if (matches.isEmpty()) {
+		return original;
 	}
 	
 	// Process matches from end to start
@@ -117,10 +127,14 @@ TextWithEntities ReplaceTextWithEntities(
 			}
 		}
 		
-		// Remove entities with zero length
+		// Remove invalid entities (zero/negative length or out of bounds)
+		const auto textLength = text.length();
 		entities.erase(
-			std::remove_if(entities.begin(), entities.end(), [](const EntityInText &e) {
-				return e.length() <= 0;
+			std::remove_if(entities.begin(), entities.end(), [textLength](const EntityInText &e) {
+				return e.length() <= 0 
+					|| e.offset() < 0 
+					|| e.offset() >= textLength
+					|| (e.offset() + e.length()) > textLength;
 			}),
 			entities.end());
 	}
@@ -133,6 +147,14 @@ TextWithEntities ReplaceTextWithEntities(
 FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 	// Skip service messages - they don't have regular text
 	if (item->isService()) {
+		item->clearFilterReplacement();
+		return { false, FilterDisplayMode::Hide };
+	}
+	
+	// Skip messages without text content (stickers, media without captions, etc.)
+	const auto &originalText = item->originalText();
+	if (originalText.text.isEmpty()) {
+		item->clearFilterReplacement();
 		return { false, FilterDisplayMode::Hide };
 	}
 	
@@ -181,16 +203,15 @@ FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 		TextWithEntities replacedTextWithEntities;
 		if (!filter.regex.isEmpty()) {
 			regexMatches = false;
-			const auto &original = item->originalText();
 			QRegularExpression regex(filter.regex);
 			if (regex.isValid()) {
-				const auto match = regex.match(original.text);
+				const auto match = regex.match(originalText.text);
 				if (match.hasMatch()) {
 					regexMatches = true;
 					if (filter.mode == FilterMode::Replace) {
 						// Prepare replacement text with entities preserved
 						replacedTextWithEntities = ReplaceTextWithEntities(
-							original,
+							originalText,
 							regex,
 							filter.replacementText);
 					}
