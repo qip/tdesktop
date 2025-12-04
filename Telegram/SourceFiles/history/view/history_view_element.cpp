@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_service_message.h"
 #include "history/view/history_view_message.h"
 #include "history/view/media/history_view_media_generic.h"
+#include "settings.h" // GetEnhancedBool, blockExist
 #include "history/view/media/history_view_media_grouped.h"
 #include "history/view/media/history_view_similar_channels.h"
 #include "history/view/media/history_view_sticker.h"
@@ -45,6 +46,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rect.h"
 #include "data/components/sponsored_messages.h"
 #include "data/data_channel.h"
+#include "data/data_peer_id.h"
 #include "data/data_saved_sublist.h"
 #include "data/data_session.h"
 #include "data/data_todo_list.h"
@@ -1052,6 +1054,19 @@ bool Element::isHiddenByGroup() const {
 bool Element::isHidden() const {
 	if (isHiddenByGroup()) {
 		return true;
+	}
+
+	// Hide messages from blocked users when the setting is enabled
+	if (GetEnhancedBool("blocked_user_spoiler_mode")) {
+		const auto item = data();
+		const auto from = item->from();
+		if (from && peerIsUser(from->id)) {
+			// Get bare user ID to match blocklist format
+			const auto bareUserId = peerToUser(from->id).bare;
+			if (blockExist(bareUserId) || from->isBlocked()) {
+				return true;
+			}
+		}
 	}
 
 	// Check message filters
