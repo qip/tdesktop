@@ -604,6 +604,20 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
+		AddButtonWithIcon(
+				container,
+				tr::lng_settings_hide_sponsored(),
+				st::settingsButtonNoIcon
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("hide_sponsored"))
+		)->toggledValue(
+		) | rpl::filter([](bool enabled) {
+			return (enabled != GetEnhancedBool("hide_sponsored"));
+		}) | rpl::start_with_next([=](bool enabled) {
+			SetEnhancedValue("hide_sponsored", enabled);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
 		auto value = rpl::single(
 				RecentDisplayLimitController::Label(GetEnhancedInt("recent_display_limit"))
 		) | rpl::then(
