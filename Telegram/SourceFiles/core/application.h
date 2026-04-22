@@ -38,6 +38,10 @@ namespace ChatHelpers {
 class EmojiKeywords;
 } // namespace ChatHelpers
 
+namespace Automation {
+class AutomationEngine;
+} // namespace Automation
+
 namespace Main {
 class Domain;
 class Account;
@@ -444,6 +448,8 @@ private:
 	base::weak_qptr<Ui::BoxContent> _badProxyDisableBox;
 
 	const std::unique_ptr<Tray> _tray;
+
+	std::unique_ptr<Automation::AutomationEngine> _automationEngine;
 
 	std::unique_ptr<Media::Player::FloatController> _floatPlayers;
 	rpl::lifetime _floatPlayerDelegateLifetime;

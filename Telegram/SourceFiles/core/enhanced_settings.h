@@ -8,6 +8,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 
 #include <QtCore/QTimer>
 #include "data/filters/message_filter.h"
+#include "data/automation/automation_job.h"
 
 namespace EnhancedSettings {
 
@@ -70,5 +71,12 @@ namespace EnhancedSettings {
 	void SetSoftMuteState(uint64 peerId, const SoftMuteState &state);
 	void UpdateSoftMuteLastNotification(uint64 peerId, int64 timestamp);
 	void RemoveSoftMute(uint64 peerId);
+
+	// Automation job management
+	[[nodiscard]] QVector<Automation::AutomationJob> GetAutomationJobs();
+	void AddAutomationJob(const Automation::AutomationJob &job);
+	void UpdateAutomationJob(const Automation::AutomationJob &job);
+	void DeleteAutomationJob(const QString &jobId);
+	void UpdateAutomationJobLastRun(const QString &jobId, int64 timestamp);
 
 } // namespace EnhancedSettings

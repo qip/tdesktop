@@ -56,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/crash_reports.h"
 #include "main/main_account.h"
 #include "main/main_domain.h"
+#include "data/automation/automation_engine.h"
 #include "main/main_session.h"
 #include "media/view/media_view_overlay_widget.h"
 #include "media/view/media_view_open_common.h"
@@ -202,6 +203,16 @@ Application::Application()
 			UpdateChecker().setMtproto(session);
 		}
 	}, _lifetime);
+
+	_automationEngine = std::make_unique<Automation::AutomationEngine>();
+	_domain->activeSessionChanges(
+	) | rpl::on_next([=](Main::Session *session) {
+		if (session) {
+			_automationEngine->start();
+		} else {
+			_automationEngine->stop();
+		}
+	}, _lifetime);
 }
 
 void Application::closeAdditionalWindows() {
@@ -253,6 +264,9 @@ Application::~Application() {
 
 	Media::Player::finish(_audio.get());
 	style::StopManager();
+
+	_automationEngine.reset();
+
 
 	EnhancedSettings::Finish();
 	Instance = nullptr;

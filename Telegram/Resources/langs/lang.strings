@@ -8109,4 +8109,34 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_filter_no_filters" = "No filters created yet.";
 "lng_filter_add_userid_title" = "Add User to Filter";
 "lng_filter_select_or_create" = "Select existing filter or create new one";
+
+// Enhanced Settings - Automation Jobs
+"lng_settings_automation" = "Automation";
+"lng_automation_manage" = "Manage Automation Jobs";
+"lng_automation_manage_title" = "Automation Jobs";
+"lng_automation_add" = "Add Job";
+"lng_automation_edit" = "Edit Job";
+"lng_automation_no_jobs" = "No automation jobs created yet.";
+"lng_automation_delete_confirm" = "Delete this automation job?";
+"lng_automation_name" = "Job Name";
+"lng_automation_cron" = "Schedule (Cron Expression)";
+"lng_automation_cron_hint" = "Format: min hour day month weekday (e.g. */5 * * * *)";
+"lng_automation_cron_invalid" = "Invalid cron expression";
+"lng_automation_run_mode" = "Run Mode";
+"lng_automation_run_exact" = "Only when client is running";
+"lng_automation_run_expired" = "Run missed on startup (once)";
+"lng_automation_action_type" = "Action Type";
+"lng_automation_action_send" = "Send Message";
+"lng_automation_action_click" = "Click Button";
+"lng_automation_target_chat" = "Target Chat";
+"lng_automation_select_chat" = "Select Chat";
+"lng_automation_no_chat" = "No chat selected";
+"lng_automation_chat_id" = "Chat ID: ";
+"lng_automation_message_text" = "Message Text";
+"lng_automation_message_placeholder" = "Message to send...";
+"lng_automation_button_index" = "Button Number (1-based)";
+"lng_automation_dismiss_popup" = "Dismiss popup after action";
+"lng_automation_enabled" = "Enabled";
+"lng_automation_delay_between" = "Delay between chats (seconds)";
+"lng_automation_chats_selected" = "{num} chat(s) selected";
 // Keys finished

@@ -23,6 +23,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "boxes/connection_box.h"
 #include "boxes/enhanced_options_box.h"
 #include "boxes/message_filter_box.h"
+#include "boxes/automation_job_box.h"
 #include "boxes/about_box.h"
 #include "ui/boxes/confirm_box.h"
 #include "platform/platform_specific.h"
@@ -503,6 +504,22 @@ namespace Settings {
 		AddSkip(container);
 	}
 
+
+	void Enhanced::SetupEnhancedAutomation(not_null<Window::SessionController*> controller, not_null<Ui::VerticalLayout *> container) {
+		AddDivider(container);
+		AddSkip(container);
+		AddSubsectionTitle(container, tr::lng_settings_automation());
+
+		AddButtonWithIcon(
+			container,
+			tr::lng_automation_manage(),
+			st::settingsButtonNoIcon
+		)->addClickHandler([=] {
+			controller->show(Box<AutomationJobListBox>(controller));
+		});
+
+		AddSkip(container);
+	}
 	void Enhanced::SetupEnhancedOthers(not_null<Window::SessionController*> controller, not_null<Ui::VerticalLayout *> container) {
 		AddDivider(container);
 		AddSkip(container);
@@ -639,6 +656,7 @@ namespace Settings {
 		SetupEnhancedMessages(controller, content);
 		SetupEnhancedButton(content);
 		SetupEnhancedVoiceChat(content);
+		SetupEnhancedAutomation(controller, content);
 		SetupEnhancedOthers(controller, content);
 
 		Ui::ResizeFitChild(this, content);

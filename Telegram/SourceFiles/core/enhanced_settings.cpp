@@ -15,6 +15,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "ui/widgets/fields/input_field.h"
 #include "lang/lang_cloud_manager.h"
 #include "data/filters/message_filter.h"
+#include "data/automation/automation_job.h"
 
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
@@ -26,6 +27,8 @@ namespace EnhancedSettings {
 	QVector<MessageFilters::MessageFilter> gMessageFilters;
 	// Global soft mute storage
 	QMap<uint64, SoftMuteState> gSoftMuteSettings;
+	// Global automation jobs storage
+	QVector<Automation::AutomationJob> gAutomationJobs;
 
 	namespace {
 
@@ -288,6 +291,47 @@ namespace EnhancedSettings {
 			SetEnhancedValue("soft_mute_default_mode", mode);
 		});
 
+		// Load automation jobs
+		ReadArrayOption(settings, "automation_jobs", [&](const QJsonArray &arr) {
+			gAutomationJobs.clear();
+			gAutomationJobs.reserve(arr.size());
+			for (const auto &item : arr) {
+				if (!item.isObject()) continue;
+				const auto obj = item.toObject();
+
+				Automation::AutomationJob job;
+				job.id = obj.value("id").toString();
+				job.name = obj.value("name").toString();
+				job.cronExpr = obj.value("cron").toString();
+				job.runMode = static_cast<Automation::RunMode>(obj.value("run_mode").toInt());
+				job.actionType = static_cast<Automation::ActionType>(obj.value("action_type").toInt());
+				const auto peerIdsVal = obj.value("peer_ids");
+				if (peerIdsVal.isArray()) {
+					for (const auto &pid : peerIdsVal.toArray()) {
+						const auto id = pid.isString()
+							? pid.toString().toULongLong()
+							: static_cast<uint64>(pid.toDouble());
+						if (id) {
+							job.peerIds.append(id);
+						}
+					}
+				} else {
+					const auto singleId = obj.value("peer_id").toString().toULongLong();
+					if (singleId) {
+						job.peerIds.append(singleId);
+					}
+				}
+				job.delayBetweenSecs = obj.value("delay_between_secs").toDouble();
+				job.messageText = obj.value("message_text").toString();
+				job.buttonIndex = obj.value("button_index").toInt();
+				job.dismissPopup = obj.value("dismiss_popup").toBool();
+				job.enabled = obj.value("enabled").toBool(true);
+				job.lastRunTime = obj.value("last_run_time").toString().toLongLong();
+
+				gAutomationJobs.append(job);
+			}
+		});
+
 		return true;
 	}
 
@@ -387,7 +431,6 @@ namespace EnhancedSettings {
 		settings.insert(qsl("hide_stories"), false);
 		settings.insert(qsl("hide_sponsored"), false);
 		settings.insert(qsl("recent_display_limit"), 20);
-
 		settings.insert(qsl("screenshot_mode"), false);
 		settings.insert(qsl("update_url"), "");
 
@@ -444,7 +487,6 @@ namespace EnhancedSettings {
 		settings.insert(qsl("hide_stories"), GetEnhancedBool("hide_stories"));
 		settings.insert(qsl("hide_sponsored"), GetEnhancedBool("hide_sponsored"));
 		settings.insert(qsl("recent_display_limit"), GetEnhancedInt("recent_display_limit"));
-
 		settings.insert(qsl("screenshot_mode"), GetEnhancedBool("screenshot_mode"));
 		settings.insert(qsl("update_url"), GetEnhancedString("update_url"));
 
@@ -464,14 +506,12 @@ namespace EnhancedSettings {
 
 			auto userIdsArray = QJsonArray();
 			for (const auto &userId : filter.userIds) {
-				// Store as string to preserve full int64 precision
 				userIdsArray.append(QString::number(userId));
 			}
 			filterObj.insert(qsl("userIds"), userIdsArray);
 
 			auto chatIdsArray = QJsonArray();
 			for (const auto &chatId : filter.chatIds) {
-				// Store as string to preserve full int64 precision
 				chatIdsArray.append(QString::number(chatId));
 			}
 			filterObj.insert(qsl("chatIds"), chatIdsArray);
@@ -495,9 +535,31 @@ namespace EnhancedSettings {
 			softMuteObj.insert(QString::number(peerId), stateObj);
 		}
 		settings.insert(qsl("soft_mute_settings"), softMuteObj);
-
-		// Write soft mute default mode
 		settings.insert(qsl("soft_mute_default_mode"), GetEnhancedInt("soft_mute_default_mode"));
+
+		// Write automation jobs
+		auto jobsArray = QJsonArray();
+		for (const auto &job : gAutomationJobs) {
+			auto jobObj = QJsonObject();
+			jobObj.insert(qsl("id"), job.id);
+			jobObj.insert(qsl("name"), job.name);
+			jobObj.insert(qsl("cron"), job.cronExpr);
+			jobObj.insert(qsl("run_mode"), static_cast<int>(job.runMode));
+			jobObj.insert(qsl("action_type"), static_cast<int>(job.actionType));
+			auto peerIdsArray = QJsonArray();
+			for (const auto &pid : job.peerIds) {
+				peerIdsArray.append(QString::number(pid));
+			}
+			jobObj.insert(qsl("peer_ids"), peerIdsArray);
+			jobObj.insert(qsl("delay_between_secs"), job.delayBetweenSecs);
+			jobObj.insert(qsl("message_text"), job.messageText);
+			jobObj.insert(qsl("button_index"), job.buttonIndex);
+			jobObj.insert(qsl("dismiss_popup"), job.dismissPopup);
+			jobObj.insert(qsl("enabled"), job.enabled);
+			jobObj.insert(qsl("last_run_time"), QString::number(job.lastRunTime));
+			jobsArray.append(jobObj);
+		}
+		settings.insert(qsl("automation_jobs"), jobsArray);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -598,6 +660,44 @@ namespace EnhancedSettings {
 
 	void RemoveSoftMute(uint64 peerId) {
 		gSoftMuteSettings.remove(peerId);
+		Write();
+	}
+
+	// Automation job management
+	QVector<Automation::AutomationJob> GetAutomationJobs() {
+		return gAutomationJobs;
+	}
+
+	void AddAutomationJob(const Automation::AutomationJob &job) {
+		gAutomationJobs.append(job);
+		Write();
+	}
+
+	void UpdateAutomationJob(const Automation::AutomationJob &job) {
+		for (auto &j : gAutomationJobs) {
+			if (j.id == job.id) {
+				j = job;
+				break;
+			}
+		}
+		Write();
+	}
+
+	void DeleteAutomationJob(const QString &jobId) {
+		gAutomationJobs.erase(
+			std::remove_if(gAutomationJobs.begin(), gAutomationJobs.end(),
+				[&](const auto &j) { return j.id == jobId; }),
+			gAutomationJobs.end());
+		Write();
+	}
+
+	void UpdateAutomationJobLastRun(const QString &jobId, int64 timestamp) {
+		for (auto &j : gAutomationJobs) {
+			if (j.id == jobId) {
+				j.lastRunTime = timestamp;
+				break;
+			}
+		}
 		Write();
 	}
 

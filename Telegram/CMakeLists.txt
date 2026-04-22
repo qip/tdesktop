@@ -1,4 +1,4 @@
-﻿# This file is part of Telegram Desktop,
+# This file is part of Telegram Desktop,
 # the official desktop application for the Telegram messaging service.
 #
 # For license and copyright information please follow this link:
@@ -320,6 +320,8 @@ PRIVATE
     boxes/local_storage_box.h
     boxes/max_invite_box.cpp
     boxes/max_invite_box.h
+    boxes/automation_job_box.cpp
+    boxes/automation_job_box.h
     boxes/enhanced_options_box.cpp
     boxes/enhanced_options_box.h
     boxes/message_filter_box.cpp
@@ -595,6 +597,11 @@ PRIVATE
     data/components/sponsored_messages.h
     data/components/top_peers.cpp
     data/components/top_peers.h
+    data/automation/automation_engine.cpp
+    data/automation/automation_engine.h
+    data/automation/automation_job.h
+    data/automation/cron_parser.cpp
+    data/automation/cron_parser.h
     data/filters/message_filter.h
     data/filters/message_filter_matcher.cpp
     data/filters/message_filter_matcher.h
