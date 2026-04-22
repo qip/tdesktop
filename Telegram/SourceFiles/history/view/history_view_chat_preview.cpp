@@ -60,7 +60,7 @@ class Item final
 	, private ListDelegate
 	, private CornerButtonsDelegate {
 public:
-	Item(not_null<Ui::RpWidget*> parent, not_null<Data::Thread*> thread);
+	Item(not_null<Ui::Menu::Menu*> parent, not_null<Data::Thread*> thread);
 
 	[[nodiscard]] not_null<QAction*> action() const override;
 	[[nodiscard]] bool isEnabled() const override;
@@ -99,7 +99,8 @@ private:
 	void listMarkContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items) override;
 	MessagesBarData listMessagesBar(
-		const std::vector<not_null<Element*>> &elements) override;
+		const std::vector<not_null<Element*>> &elements,
+		bool markLastAsRead) override;
 	void listContentRefreshed() override;
 	void listUpdateDateLink(
 		ClickHandlerPtr &link,
@@ -258,6 +259,11 @@ struct StatusFields {
 [[nodiscard]] rpl::producer<Info::Profile::Badge::Content> ContentForPeer(
 		not_null<PeerData*> peer) {
 	using namespace Info::Profile;
+	if (peer->isSelf()
+		|| peer->isRepliesChat()
+		|| peer->isSavedHiddenAuthor()) {
+		return rpl::single(Badge::Content{});
+	}
 	return rpl::combine(
 		BadgeContentForPeer(peer),
 		VerifiedContentForPeer(peer)
@@ -269,7 +275,7 @@ struct StatusFields {
 	});
 }
 
-Item::Item(not_null<Ui::RpWidget*> parent, not_null<Data::Thread*> thread)
+Item::Item(not_null<Ui::Menu::Menu*> parent, not_null<Data::Thread*> thread)
 : Ui::Menu::ItemBase(parent, st::previewMenu.menu)
 , _dummyAction(new QAction(parent))
 , _session(&thread->session())
@@ -322,7 +328,7 @@ void Item::setupTop() {
 	_top->setClickedCallback([=] {
 		_actions.fire({ .openInfo = true });
 	});
-	_top->paintRequest() | rpl::start_with_next([=](QRect clip) {
+	_top->paintRequest() | rpl::on_next([=](QRect clip) {
 		auto p = QPainter(_top.get());
 		p.fillRect(clip, st::topBarBg);
 	}, _top->lifetime());
@@ -358,7 +364,7 @@ void Item::setupTop() {
 	if (status) {
 		std::move(
 			statusFields
-		) | rpl::start_with_next([=](const StatusFields &fields) {
+		) | rpl::on_next([=](const StatusFields &fields) {
 			status->setTextColorOverride(fields.active
 				? st::windowActiveTextFg->c
 				: std::optional<QColor>());
@@ -391,7 +397,7 @@ void Item::setupTop() {
 		_top->widthValue(),
 		std::move(nameValue),
 		rpl::single(rpl::empty) | rpl::then(_badge.updated())
-	) | rpl::start_with_next([=](int width, const auto &, const auto &) {
+	) | rpl::on_next([=](int width, const auto &, const auto &) {
 		const auto &st = st::previewTop;
 		name->resizeToNaturalWidth(width
 			- st.namePosition.x()
@@ -410,7 +416,7 @@ void Item::setupTop() {
 			name->y() + name->height());
 	}, name->lifetime());
 
-	_top->geometryValue() | rpl::start_with_next([=](QRect geometry) {
+	_top->geometryValue() | rpl::on_next([=](QRect geometry) {
 		const auto &st = st::previewTop;
 		if (status) {
 			status->resizeToWidth(geometry.width()
@@ -442,7 +448,7 @@ void Item::setupMarkRead() {
 	) | rpl::then(
 		_thread->owner().chatsListFor(_thread)->unreadStateChanges(
 		) | rpl::to_empty
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		const auto state = _thread->chatListBadgesState();
 		const auto unread = (state.unreadCounter || state.unread);
 		const auto hidden = (_thread->asTopic() || _thread->asSublist())
@@ -463,7 +469,7 @@ void Item::setupMarkRead() {
 	}, _markRead->lifetime());
 
 	const auto shadow = Ui::CreateChild<Ui::PlainShadow>(this);
-	_markRead->geometryValue() | rpl::start_with_next([=](QRect geometry) {
+	_markRead->geometryValue() | rpl::on_next([=](QRect geometry) {
 		shadow->setGeometry(
 			geometry.x(),
 			geometry.y() - st::lineWidth,
@@ -488,7 +494,7 @@ void Item::setupBackground() {
 			QRect(QPoint(), size()));
 	};
 	paint();
-	_theme->repaintBackgroundRequests() | rpl::start_with_next([=] {
+	_theme->repaintBackgroundRequests() | rpl::on_next([=] {
 		paint();
 		update();
 	}, lifetime());
@@ -504,7 +510,7 @@ void Item::setupHistory() {
 		_chatStyle.get(),
 		static_cast<CornerButtonsDelegate*>(this));
 
-	_markRead->shownValue() | rpl::start_with_next([=](bool shown) {
+	_markRead->shownValue() | rpl::on_next([=](bool shown) {
 		const auto top = _top->height();
 		const auto bottom = shown ? _markRead->height() : 0;
 		_scroll->setGeometry(rect().marginsRemoved({ 0, top, 0, bottom }));
@@ -512,7 +518,7 @@ void Item::setupHistory() {
 	}, _markRead->lifetime());
 
 	_scroll->scrolls(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		updateInnerVisibleArea();
 	}, lifetime());
 	_scroll->setOverscrollBg(QColor(0, 0, 0, 0));
@@ -520,11 +526,11 @@ void Item::setupHistory() {
 	_scroll->setOverscrollTypes(Type::Real, Type::Real);
 
 	_inner->scrollKeyEvents(
-	) | rpl::start_with_next([=](not_null<QKeyEvent*> e) {
+	) | rpl::on_next([=](not_null<QKeyEvent*> e) {
 		_scroll->keyPressEvent(e);
 	}, lifetime());
 
-	_scroll->events() | rpl::start_with_next([=](not_null<QEvent*> e) {
+	_scroll->events() | rpl::on_next([=](not_null<QEvent*> e) {
 		if (e->type() == QEvent::MouseButtonDblClick) {
 			const auto button = static_cast<QMouseEvent*>(e.get())->button();
 			if (button == Qt::LeftButton) {
@@ -643,7 +649,8 @@ void Item::listMarkContentsRead(
 }
 
 MessagesBarData Item::listMessagesBar(
-		const std::vector<not_null<Element*>> &elements) {
+		const std::vector<not_null<Element*>> &elements,
+		bool markLastAsRead) {
 	if (elements.empty()) {
 		return {};
 	} else if (!_replies && !_sublist && !_history->unreadCount()) {
@@ -855,6 +862,11 @@ Ui::ChatPaintContext Item::listPreparePaintContext(
 		Ui::ChatPaintContextArgs &&args) {
 	const auto visibleAreaTopLocal = mapFromGlobal(
 		args.visibleAreaPositionGlobal).y();
+	const auto area = QRect(
+		0,
+		args.visibleAreaTop,
+		args.visibleAreaWidth,
+		args.visibleAreaHeight);
 	const auto viewport = QRect(
 		0,
 		args.visibleAreaTop - visibleAreaTopLocal,
@@ -863,6 +875,7 @@ Ui::ChatPaintContext Item::listPreparePaintContext(
 	return args.theme->preparePaintContext(
 		_chatStyle.get(),
 		viewport,
+		area,
 		args.clip,
 		false);
 }
@@ -955,12 +968,12 @@ ChatPreview MakeChatPreview(
 	};
 	const auto menu = result.menu.get();
 
-	auto action = base::make_unique_q<Item>(menu, thread);
+	auto action = base::make_unique_q<Item>(menu->menu(), thread);
 	result.actions = action->actions();
 	menu->addAction(std::move(action));
 	if (const auto topic = thread->asTopic()) {
 		const auto weak = base::make_weak(menu);
-		topic->destroyed() | rpl::start_with_next([weak] {
+		topic->destroyed() | rpl::on_next([weak] {
 			if (const auto strong = weak.get()) {
 				LOG(("Preview hidden for a destroyed topic."));
 				strong->hideMenu(true);

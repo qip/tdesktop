@@ -116,7 +116,7 @@ void MessageFilterListBox::refreshList() {
 		});
 
 		row->widthValue(
-		) | rpl::start_with_next([=](int width) {
+		) | rpl::on_next([=](int width) {
 			const auto right = st::settingsButton.padding.right();
 			const auto top = (row->height() - deleteBtn->height()) / 2;
 			
@@ -264,7 +264,7 @@ void MessageFilterEditBox::prepare() {
 		st::defaultCheckbox);
 	_global->moveToLeft(st::boxPadding.left(), y);
 	_global->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		updateGlobalState();
 	}, _global->lifetime());
 	y += _global->heightNoMargins() + st::boxMediumSkip;

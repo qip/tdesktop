@@ -144,6 +144,7 @@ bool MessageView::prepared(
 		Data::Forum *forum,
 		Data::SavedMessages *monoforum) const {
 	return (_textCachedFor == item.get())
+		&& (_unreadMedia == item->isUnreadMedia())
 		&& ((!forum && !monoforum)
 			|| (_topics
 				&& _topics->forum() == forum
@@ -176,6 +177,7 @@ void MessageView::prepare(
 		}
 	}
 	if (_textCachedFor == item.get()) {
+		_unreadMedia = item->isUnreadMedia();
 		return;
 	}
 	options.existing = &_imagesCache;
@@ -310,6 +312,7 @@ void MessageView::prepare(
 		DialogTextOptions(),
 		std::move(context));
 	_textCachedFor = item;
+	_unreadMedia = item->isUnreadMedia();
 	_imagesCache = std::move(preview.images);
 	if (!ranges::any_of(_imagesCache, &ItemPreviewImage::hasSpoiler)) {
 		_spoiler = nullptr;
@@ -320,7 +323,7 @@ void MessageView::prepare(
 		if (!_loadingContext) {
 			_loadingContext = std::make_unique<LoadingContext>();
 			item->history()->session().downloaderTaskFinished(
-			) | rpl::start_with_next([=] {
+			) | rpl::on_next([=] {
 				_textCachedFor = nullptr;
 			}, _loadingContext->lifetime);
 		}

@@ -38,11 +38,10 @@ void AboutSponsoredBox(not_null<Ui::GenericBox*> box) {
 			st);
 		button->setBrushOverride(Qt::NoBrush);
 		button->setPenOverride(QPen(st::historyLinkInFg));
-		button->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 		rpl::combine(
 			row->sizeValue(),
 			button->sizeValue()
-		) | rpl::start_with_next([=](
+		) | rpl::on_next([=](
 				const QSize &rowSize,
 				const QSize &buttonSize) {
 			button->moveToLeft(
@@ -61,9 +60,9 @@ void AboutSponsoredBox(not_null<Ui::GenericBox*> box) {
 			tr::lng_sponsored_info_description1_link(),
 			tr::lng_sponsored_info_description1_url()
 		) | rpl::map([](const QString &text, const QString &url) {
-			return Ui::Text::Link(text, url);
+			return tr::link(text, url);
 		}),
-		Ui::Text::RichLangValue);
+		tr::rich);
 	box->addRow(object_ptr<FlatLabel>(box, std::move(text1), stLabel));
 
 	box->addSkip(st::sponsoredUrlButtonSkip);

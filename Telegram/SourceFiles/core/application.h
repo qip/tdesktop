@@ -304,6 +304,9 @@ public:
 	rpl::producer<bool> passcodeLockChanges() const;
 	rpl::producer<bool> passcodeLockValue() const;
 
+	void lockBySetupEmail();
+	void unlockSetupEmail();
+
 	void checkAutoLock(crl::time lastNonIdleTime = 0);
 	void checkAutoLockIn(crl::time time);
 	void localPasscodeChanged();
@@ -326,6 +329,7 @@ public:
 	void handleAppActivated();
 	void handleAppDeactivated();
 	[[nodiscard]] rpl::producer<bool> appDeactivatedValue() const;
+	[[nodiscard]] rpl::producer<> inAppKeyPressed() const;
 
 	void materializeLocalDrafts();
 	[[nodiscard]] rpl::producer<> materializeLocalDraftsRequests() const;
@@ -429,6 +433,8 @@ private:
 	Window::Controller *_lastActiveWindow = nullptr;
 	Window::Controller *_lastActivePrimaryWindow = nullptr;
 	Window::Controller *_windowInSettings = nullptr;
+	bool _lastMouseIgnored = false;
+	bool _lastTouchProcessed = false;
 
 	std::unique_ptr<Media::View::OverlayWidget> _mediaView;
 	const std::unique_ptr<Lang::Instance> _langpack;
@@ -444,6 +450,7 @@ private:
 	bool _floatPlayerGifsPaused = false;
 
 	rpl::variable<bool> _passcodeLock;
+	rpl::variable<bool> _setupEmailLock;
 	bool _screenIsLocked = false;
 
 	crl::time _shouldLockAt = 0;
@@ -460,6 +467,7 @@ private:
 	base::flat_map<not_null<QWidget*>, LeaveFilter> _leaveFilters;
 
 	rpl::event_stream<Media::View::OpenRequest> _openInMediaViewRequests;
+	rpl::event_stream<> _inAppKeyPressed;
 
 	rpl::event_stream<> _materializeLocalDraftsRequests;
 

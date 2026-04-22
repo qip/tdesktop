@@ -76,7 +76,7 @@ Manager::Manager(System *system)
 : Notifications::Manager(system)
 , _inputCheckTimer([=] { checkLastInput(); }) {
 	system->settingsChanged(
-	) | rpl::start_with_next([=](ChangeType change) {
+	) | rpl::on_next([=](ChangeType change) {
 		settingsChanged(change);
 	}, _lifetime);
 }
@@ -256,14 +256,14 @@ void Manager::subscribeToSession(not_null<Main::Session*> session) {
 	if (i == _subscriptions.end()) {
 		i = _subscriptions.emplace(session).first;
 		session->account().sessionChanges(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			_subscriptions.remove(session);
 		}, i->second.lifetime);
 	} else if (i->second.subscription) {
 		return;
 	}
 	session->downloaderTaskFinished(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		auto found = false;
 		for (const auto &notification : _notifications) {
 			if (const auto history = notification->maybeHistory()) {
@@ -661,14 +661,16 @@ Notification::Notification(
 , _fromScheduled(fromScheduled)
 , _close(this, st::notifyClose)
 , _reply(this, tr::lng_notification_reply(), st::defaultBoxButton) {
+	_reply->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
+
 	Lang::Updated(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		refreshLang();
 	}, lifetime());
 
 	if (_topic) {
 		_topic->destroyed(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			unlinkHistory();
 		}, lifetime());
 	}
@@ -699,7 +701,7 @@ Notification::Notification(
 	prepareActionsCache();
 
 	style::PaletteChanged(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		updateNotifyDisplay();
 		if (!_buttonsCache.isNull()) {
 			prepareActionsCache();
@@ -1003,7 +1005,7 @@ void Notification::updateNotifyDisplay() {
 		auto title = options.hideNameAndPhoto
 			? TextWithEntities{ u"64Gram Desktop"_q }
 			: reminder
-			? tr::lng_notification_reminder(tr::now, Ui::Text::WithEntities)
+			? tr::lng_notification_reminder(tr::now, tr::marked)
 			: topicWithChat();
 		const auto fullTitle = manager()->addTargetAccountName(
 			std::move(title),
@@ -1123,13 +1125,13 @@ void Notification::showReplyField() {
 	// Catch mouse press event to activate the window.
 	QCoreApplication::instance()->installEventFilter(this);
 	_replyArea->heightChanges(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		replyResized();
 	}, _replyArea->lifetime());
 	_replyArea->submits(
-	) | rpl::start_with_next([=] { sendReply(); }, _replyArea->lifetime());
+	) | rpl::on_next([=] { sendReply(); }, _replyArea->lifetime());
 	_replyArea->cancelled(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		replyCancel();
 	}, _replyArea->lifetime());
 
@@ -1262,7 +1264,7 @@ HideAllButton::HideAllButton(
 	updateGeometry(position.x(), position.y(), st::notifyWidth, st::notifyHideAllHeight);
 
 	style::PaletteChanged(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		update();
 	}, lifetime());
 

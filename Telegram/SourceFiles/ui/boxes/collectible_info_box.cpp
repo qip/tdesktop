@@ -82,7 +82,7 @@ constexpr auto kTonMultiplier = uint64(1000000000);
 	const auto nameWidth = st->style.font->width(name);
 	const auto added = size + st->padding.left() + st->padding.right();
 	const auto subscribed = std::make_shared<bool>(false);
-	raw->paintRequest() | rpl::start_with_next([=] {
+	raw->paintRequest() | rpl::on_next([=] {
 		const auto use = std::min(nameWidth + added, raw->width());
 		const auto x = (raw->width() - use) / 2;
 		if (const auto available = use - added; available > 0) {
@@ -132,7 +132,7 @@ void CollectibleInfoBox(
 		object_ptr<Ui::FixedHeightWidget>(box, st::collectibleIconDiameter),
 		st::collectibleIconPadding);
 	icon->paintRequest(
-	) | rpl::start_with_next([=](QRect clip) {
+	) | rpl::on_next([=](QRect clip) {
 		const auto size = icon->height();
 		const auto inner = QRect(
 			(icon->width() - size) / 2,
@@ -160,11 +160,11 @@ void CollectibleInfoBox(
 		},
 		QMargins());
 	box->showFinishes(
-	) | rpl::start_with_next([animate = std::move(lottie.animate)] {
+	) | rpl::on_next([animate = std::move(lottie.animate)] {
 		animate(anim::repeat::once);
 	}, box->lifetime());
 	const auto animation = lottie.widget.release();
-	icon->sizeValue() | rpl::start_with_next([=](QSize size) {
+	icon->sizeValue() | rpl::on_next([=](QSize size) {
 		const auto skip = (type == CollectibleType::Phone)
 			? style::ConvertScale(2)
 			: 0;
@@ -178,13 +178,13 @@ void CollectibleInfoBox(
 		? tr::lng_collectible_phone_title(
 			tr::now,
 			lt_phone,
-			Ui::Text::Link(formatted),
-			Ui::Text::WithEntities)
+			tr::link(formatted),
+			tr::marked)
 		: tr::lng_collectible_username_title(
 			tr::now,
 			lt_username,
-			Ui::Text::Link(formatted),
-			Ui::Text::WithEntities);
+			tr::link(formatted),
+			tr::marked);
 	const auto copyCallback = [box, type, formatted, text = info.copyText](
 			bool copyLink) {
 		QGuiApplication::clipboard()->setText((text.isEmpty() || !copyLink)
@@ -218,7 +218,7 @@ void CollectibleInfoBox(
 			TextWithEntities{ FormatDate(info.date) },
 			lt_price,
 			FormatPrice(info),
-			Ui::Text::RichLangValue);
+			tr::rich);
 	const auto label = box->addRow(
 		object_ptr<Ui::FlatLabel>(box, st::collectibleInfo),
 		st::collectibleInfoPadding,
@@ -232,7 +232,6 @@ void CollectibleInfoBox(
 			tr::lng_collectible_learn_more(),
 			st::collectibleMore),
 		st::collectibleMorePadding);
-	more->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	more->setClickedCallback([url = info.url] {
 		File::OpenUrl(url);
 	});
@@ -245,7 +244,6 @@ void CollectibleInfoBox(
 		phrase(),
 		st::collectibleCopy);
 	const auto copy = owned.data();
-	copy->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	copy->setClickedCallback([copyCallback] {
 		copyCallback(true);
 	});
@@ -260,11 +258,11 @@ void CollectibleInfoBox(
 		box->closeBox();
 	});
 	box->widthValue(
-	) | rpl::start_with_next([=](int width) {
+	) | rpl::on_next([=](int width) {
 		close->moveToRight(0, 0);
 	}, box->lifetime());
 
-	box->widthValue() | rpl::start_with_next([=](int width) {
+	box->widthValue() | rpl::on_next([=](int width) {
 		more->setFullWidth(width
 			- st::collectibleMorePadding.left()
 			- st::collectibleMorePadding.right());

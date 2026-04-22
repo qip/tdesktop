@@ -198,15 +198,15 @@ VideoTrackObject::VideoTrackObject(
 
 rpl::producer<> VideoTrackObject::checkNextFrame() const {
 	return interrupted()
-		? (rpl::complete<>() | rpl::type_erased())
+		? (rpl::complete<>() | rpl::type_erased)
 		: !_shared->firstPresentHappened()
-		? (_checkNextFrame.events() | rpl::type_erased())
+		? (_checkNextFrame.events() | rpl::type_erased)
 		: _checkNextFrame.events_starting_with({});
 }
 
 rpl::producer<> VideoTrackObject::waitingForData() const {
 	return interrupted()
-		? (rpl::never() | rpl::type_erased())
+		? (rpl::never() | rpl::type_erased)
 		: _waitingForData.events();
 }
 
@@ -372,6 +372,11 @@ auto VideoTrackObject::readFrame(not_null<Frame*> frame) -> FrameResult {
 		Assert(_stream.queue.empty());
 		_waitingForData.fire({});
 		return FrameResult::Waiting;
+	}
+	const auto decodedFrame = _stream.decodedFrame.get();
+	if (int64(decodedFrame->width) * decodedFrame->height > kMaxFrameArea) {
+		fail(Error::InvalidData);
+		return FrameResult::Error;
 	}
 	const auto position = currentFramePosition();
 	if (position == kTimeUnknown) {
@@ -649,7 +654,7 @@ bool VideoTrackObject::tryReadFirstFrame(FFmpeg::Packet &&packet) {
 
 bool VideoTrackObject::processFirstFrame() {
 	const auto decodedFrame = _stream.decodedFrame.get();
-	if (decodedFrame->width * decodedFrame->height > kMaxFrameArea) {
+	if (int64(decodedFrame->width) * decodedFrame->height > kMaxFrameArea) {
 		return false;
 	} else if (decodedFrame->hw_frames_ctx) {
 		if (!_stream.transferredFrame) {
@@ -729,6 +734,7 @@ void VideoTrackObject::callReady() {
 			_stream.rotation),
 		.cover = frame->original,
 		.rotation = _stream.rotation,
+		.fps = _stream.fps,
 		.alpha = frame->alpha,
 	} });
 }

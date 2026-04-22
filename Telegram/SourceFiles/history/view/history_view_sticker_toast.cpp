@@ -21,7 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/premium_preview_box.h"
 #include "lottie/lottie_single_player.h"
 #include "window/window_session_controller.h"
-#include "settings/settings_premium.h"
+#include "settings/sections/settings_premium.h"
 #include "apiwrap.h"
 #include "styles/style_chat.h"
 
@@ -145,14 +145,14 @@ void StickerToast::showWithTitle(const QString &title) {
 	const auto toSaved = isEmoji
 		&& (_section == Section::Message)
 		&& !(++counter % 2);
-	const auto text = Ui::Text::Bold(
+	const auto text = tr::bold(
 		title
 	).append('\n').append(
 		(toSaved
-			? tr::lng_animated_emoji_saved(tr::now, Ui::Text::RichLangValue)
+			? tr::lng_animated_emoji_saved(tr::now, tr::rich)
 			: isEmoji
-			? tr::lng_animated_emoji_text(tr::now, Ui::Text::RichLangValue)
-			: tr::lng_sticker_premium_text(tr::now, Ui::Text::RichLangValue))
+			? tr::lng_animated_emoji_text(tr::now, tr::rich)
+			: tr::lng_sticker_premium_text(tr::now, tr::rich))
 	);
 	_st = st::historyPremiumToast;
 	const auto skip = _st.padding.top();
@@ -202,12 +202,11 @@ void StickerToast::showWithTitle(const QString &title) {
 		widget.get(),
 		rpl::single(view),
 		st::historyPremiumViewSet);
-	button->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	button->show();
 	rpl::combine(
 		widget->sizeValue(),
 		button->sizeValue()
-	) | rpl::start_with_next([=](QSize outer, QSize inner) {
+	) | rpl::on_next([=](QSize outer, QSize inner) {
 		button->moveToRight(
 			0,
 			(outer.height() - inner.height()) / 2,
@@ -310,7 +309,7 @@ void StickerToast::setupEmojiPreview(
 		[=] { widget->update(); });
 
 	widget->paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		auto p = QPainter(widget);
 		const auto size = Ui::Emoji::GetSizeLarge()
 			/ style::DevicePixelRatio();
@@ -336,7 +335,7 @@ void StickerToast::setupLottiePreview(not_null<Ui::RpWidget*> widget, int size) 
 		Lottie::Quality::Default);
 
 	widget->paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		if (!player->ready()) {
 			return;
 		}
@@ -348,7 +347,7 @@ void StickerToast::setupLottiePreview(not_null<Ui::RpWidget*> widget, int size) 
 	}, widget->lifetime());
 
 	player->updates(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		widget->update();
 	}, widget->lifetime());
 }

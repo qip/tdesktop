@@ -64,6 +64,7 @@ void SaveValidVideoInformation(
 	to.size = from.size;
 	to.cover = std::move(from.cover);
 	to.rotation = from.rotation;
+	to.fps = from.fps;
 	to.alpha = from.alpha;
 }
 
@@ -715,7 +716,7 @@ void Player::start() {
 	_stage = Stage::Started;
 	const auto guard = base::make_weak(&_sessionGuard);
 
-	_file->speedEstimate() | rpl::start_with_next([=](SpeedEstimate value) {
+	_file->speedEstimate() | rpl::on_next([=](SpeedEstimate value) {
 		_updates.fire({ value });
 	}, _sessionLifetime);
 
@@ -724,7 +725,7 @@ void Player::start() {
 		_video ? _video->waitingForData() : nullptr
 	) | rpl::filter([=] {
 		return !bothReceivedEnough(kBufferFor);
-	}) | rpl::start_with_next([=] {
+	}) | rpl::on_next([=] {
 		_pausedByWaitingForData = true;
 		updatePausedState();
 		_updates.fire({ WaitingForData{ true } });
@@ -732,7 +733,7 @@ void Player::start() {
 
 	if (guard && _audio && !_audioFinished) {
 		_audio->playPosition(
-		) | rpl::start_with_next_done([=](crl::time position) {
+		) | rpl::on_next_done([=](crl::time position) {
 			audioPlayedTill(position);
 		}, [=] {
 			Expects(_stage == Stage::Started);
@@ -746,7 +747,7 @@ void Player::start() {
 
 	if (guard && _video) {
 		_video->checkNextFrame(
-		) | rpl::start_with_next_done([=] {
+		) | rpl::on_next_done([=] {
 			checkVideoStep();
 		}, [=] {
 			Assert(_stage == Stage::Started);
@@ -760,7 +761,7 @@ void Player::start() {
 		crl::on_main_update_requests(
 		) | rpl::filter([=] {
 			return !_videoFinished;
-		}) | rpl::start_with_next([=] {
+		}) | rpl::on_next([=] {
 			checkVideoStep();
 		}, _sessionLifetime);
 	}
