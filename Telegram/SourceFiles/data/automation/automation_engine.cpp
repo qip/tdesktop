@@ -207,10 +207,24 @@ void AutomationEngine::executeClickButton(AutomationJob &job) {
 			if (rows.empty()) {
 				return;
 			}
+			int totalButtons = 0;
+			for (const auto &row : rows) {
+				totalButtons += int(row.size());
+			}
+			if (totalButtons == 0) {
+				return;
+			}
+			int resolvedIndex = buttonIndex;
+			if (resolvedIndex < 0) {
+				resolvedIndex = totalButtons + resolvedIndex;
+			}
+			if (resolvedIndex < 0 || resolvedIndex >= totalButtons) {
+				return;
+			}
 			int idx = 0;
 			for (int r = 0; r < int(rows.size()); ++r) {
 				for (int c = 0; c < int(rows[r].size()); ++c) {
-					if (idx == buttonIndex) {
+					if (idx == resolvedIndex) {
 						Api::SendBotCallbackData(ctrl, item, r, c);
 						if (isLast) {
 							dismissPopupIfNeeded(jobCopy);

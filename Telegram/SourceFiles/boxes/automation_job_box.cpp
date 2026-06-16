@@ -212,9 +212,7 @@ AutomationJobEditBox::AutomationJobEditBox(
 , _cronExpr(this, st::defaultInputField, nullptr, job.cronExpr)
 , _messageText(this, st::defaultInputField,
 	tr::lng_automation_message_placeholder(), job.messageText)
-, _buttonIndex(this, st::defaultInputField, nullptr, job.buttonIndex > 0
-		? QString::number(job.buttonIndex + 1)
-		: QString("1"))
+, _buttonIndex(this, st::defaultInputField, nullptr, QString::number(job.buttonIndex))
 , _delayBetween(this, st::defaultInputField, nullptr, QString::number(job.delayBetweenSecs, 'g', 10)) {
 }
 
@@ -533,7 +531,7 @@ void AutomationJobEditBox::save() {
 
 	bool btnOk = false;
 	const int btnVal = _buttonIndex->getLastText().trimmed().toInt(&btnOk);
-	_job.buttonIndex = (btnOk && btnVal > 0) ? (btnVal - 1) : 0;
+	_job.buttonIndex = btnOk ? btnVal : 0;
 
 	bool delayOk = false;
 	const double delayVal = _delayBetween->getLastText().trimmed().toDouble(&delayOk);
