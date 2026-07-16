@@ -8534,7 +8534,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_automation_chat_id" = "Chat ID: ";
 "lng_automation_message_text" = "Message Text";
 "lng_automation_message_placeholder" = "Message to send...";
-"lng_automation_button_index" = "Button Number (1-based)";
+"lng_automation_button_index" = "Button Index (0-based, -1 = last)";
 "lng_automation_dismiss_popup" = "Dismiss popup after action";
 "lng_automation_enabled" = "Enabled";
 "lng_automation_delay_between" = "Delay between chats (seconds)";
