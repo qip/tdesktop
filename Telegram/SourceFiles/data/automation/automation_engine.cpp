@@ -113,12 +113,12 @@ void AutomationEngine::checkExpired() {
 		if (shouldRun) {
 			const auto delayMs = static_cast<crl::time>(job.startupDelaySecs * 1000);
 			const auto jobId = job.id;
-			const auto run = [=, this, j = job]() mutable {
+			auto run = [=, this, j = job]() mutable {
 				executeJob(j);
 				EnhancedSettings::UpdateAutomationJobLastRun(jobId, QDateTime::currentSecsSinceEpoch());
 			};
 			if (delayMs > 0) {
-				base::call_delayed(delayMs, run);
+				base::call_delayed(delayMs, std::move(run));
 			} else {
 				run();
 			}
