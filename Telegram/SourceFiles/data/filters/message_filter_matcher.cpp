@@ -26,11 +26,10 @@ TextWithEntities ReplaceTextWithEntities(
 		const TextWithEntities &original,
 		const QRegularExpression &regex,
 		const QString &replacement) {
-	// Safety check: don't process empty text
 	if (original.text.isEmpty()) {
 		return original;
 	}
-	
+
 	auto result = original;
 	auto &text = result.text;
 	auto &entities = result.entities;
@@ -43,11 +42,10 @@ TextWithEntities ReplaceTextWithEntities(
 		matches.append(it.next());
 	}
 	
-	// No matches found, return original unchanged
 	if (matches.isEmpty()) {
 		return original;
 	}
-	
+
 	// Process matches from end to start
 	for (int i = matches.size() - 1; i >= 0; --i) {
 		const auto &match = matches[i];
@@ -131,8 +129,8 @@ TextWithEntities ReplaceTextWithEntities(
 		const auto textLength = text.length();
 		entities.erase(
 			std::remove_if(entities.begin(), entities.end(), [textLength](const EntityInText &e) {
-				return e.length() <= 0 
-					|| e.offset() < 0 
+				return e.length() <= 0
+					|| e.offset() < 0
 					|| e.offset() >= textLength
 					|| (e.offset() + e.length()) > textLength;
 			}),
@@ -147,14 +145,6 @@ TextWithEntities ReplaceTextWithEntities(
 FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 	// Skip service messages - they don't have regular text
 	if (item->isService()) {
-		item->clearFilterReplacement();
-		return { false, FilterDisplayMode::Hide };
-	}
-	
-	// Skip messages without text content (stickers, media without captions, etc.)
-	const auto &originalText = item->originalText();
-	if (originalText.text.isEmpty()) {
-		item->clearFilterReplacement();
 		return { false, FilterDisplayMode::Hide };
 	}
 	
@@ -203,15 +193,16 @@ FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
 		TextWithEntities replacedTextWithEntities;
 		if (!filter.regex.isEmpty()) {
 			regexMatches = false;
+			const auto &original = item->originalText();
 			QRegularExpression regex(filter.regex);
 			if (regex.isValid()) {
-				const auto match = regex.match(originalText.text);
+				const auto match = regex.match(original.text);
 				if (match.hasMatch()) {
 					regexMatches = true;
 					if (filter.mode == FilterMode::Replace) {
 						// Prepare replacement text with entities preserved
 						replacedTextWithEntities = ReplaceTextWithEntities(
-							originalText,
+							original,
 							regex,
 							filter.replacementText);
 					}
