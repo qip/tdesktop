@@ -169,6 +169,13 @@ bool WindowsIntegration::processEvent(
 		}
 		break;
 
+	case WM_POWERBROADCAST:
+		if (wParam == PBT_APMRESUMESUSPEND
+			|| wParam == PBT_APMRESUMEAUTOMATIC) {
+			Core::App().checkLocalTime();
+		}
+		break;
+
 	case WM_SETTINGCHANGE:
 		RefreshTaskbarThemeValue();
 #if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)

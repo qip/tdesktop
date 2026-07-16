@@ -1005,6 +1005,13 @@ void Application::checkLocalTime() {
 	if (const auto session = maybePrimarySession()) {
 		session->updates().checkLastUpdate(adjusted);
 	}
+	if (adjusted && _automationEngine) {
+		_automationEngine->checkExpiredIfNeeded();
+	}
+}
+
+Automation::AutomationEngine *Application::automationEngine() const {
+	return _automationEngine.get();
 }
 
 void Application::handleAppActivated() {

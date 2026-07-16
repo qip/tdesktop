@@ -322,6 +322,7 @@ namespace EnhancedSettings {
 					}
 				}
 				job.delayBetweenSecs = obj.value("delay_between_secs").toDouble();
+				job.startupDelaySecs = obj.value("startup_delay_secs").toDouble();
 				job.messageText = obj.value("message_text").toString();
 				job.buttonIndex = obj.value("button_index").toInt();
 				job.dismissPopup = obj.value("dismiss_popup").toBool();
@@ -552,6 +553,7 @@ namespace EnhancedSettings {
 			}
 			jobObj.insert(qsl("peer_ids"), peerIdsArray);
 			jobObj.insert(qsl("delay_between_secs"), job.delayBetweenSecs);
+			jobObj.insert(qsl("startup_delay_secs"), job.startupDelaySecs);
 			jobObj.insert(qsl("message_text"), job.messageText);
 			jobObj.insert(qsl("button_index"), job.buttonIndex);
 			jobObj.insert(qsl("dismiss_popup"), job.dismissPopup);

@@ -303,6 +303,7 @@ public:
 	[[nodiscard]] bool uploadPreventsQuit();
 	[[nodiscard]] bool downloadPreventsQuit();
 	void checkLocalTime();
+	[[nodiscard]] Automation::AutomationEngine *automationEngine() const;
 	void lockByPasscode();
 	void maybeLockByPasscode();
 	void unlockPasscode();

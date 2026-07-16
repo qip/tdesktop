@@ -23,6 +23,8 @@ public:
 	void start();
 	void stop();
 	void reload();
+	void checkExpiredIfNeeded();
+	void runJobNow(const QString &jobId);
 
 private:
 	void tick();
@@ -36,6 +38,8 @@ private:
 
 	base::Timer _tickTimer;
 	bool _running = false;
+	int64 _lastTickTime = 0;
+	int64 _lastCheckExpiredTime = 0;
 
 };
 

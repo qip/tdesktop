@@ -29,6 +29,8 @@ https://github.com/AyuGram/AyuGramDesktop/blob/dev/LEGAL
 #include "dialogs/dialogs_main_list.h"
 #include "dialogs/dialogs_indexed_list.h"
 #include "data/data_chat_filters.h"
+#include "data/automation/automation_engine.h"
+#include "core/application.h"
 
 #include <QtCore/QUuid>
 
@@ -112,7 +114,8 @@ void AutomationJobListBox::refreshList() {
 		auto st = st::settingsButton;
 		st.padding.setRight(st.padding.right()
 			+ st::filtersRemove.width
-			+ st::boxLittleSkip);
+			+ 60
+			+ st::boxLittleSkip * 2);
 		return st;
 	}();
 
@@ -133,6 +136,16 @@ void AutomationJobListBox::refreshList() {
 			editJob(id);
 		});
 
+		const auto runBtn = Ui::CreateChild<Ui::LinkButton>(
+			row,
+			tr::lng_automation_run_now(tr::now));
+		runBtn->show();
+		runBtn->setClickedCallback([=, id = job.id] {
+			if (const auto engine = Core::App().automationEngine()) {
+				engine->runJobNow(id);
+			}
+		});
+
 		const auto deleteBtn = Ui::CreateChild<Ui::IconButton>(
 			row,
 			st::filtersRemove);
@@ -147,6 +160,10 @@ void AutomationJobListBox::refreshList() {
 			deleteBtn->moveToRight(
 				st::settingsButton.padding.right(), top);
 			deleteBtn->raise();
+			const auto runTop = (size.height() - runBtn->height()) / 2;
+			runBtn->moveToRight(
+				st::settingsButton.padding.right() + deleteBtn->width() + st::boxLittleSkip, runTop);
+			runBtn->raise();
 		}, deleteBtn->lifetime());
 	}
 }
@@ -213,7 +230,8 @@ AutomationJobEditBox::AutomationJobEditBox(
 , _messageText(this, st::defaultInputField,
 	tr::lng_automation_message_placeholder(), job.messageText)
 , _buttonIndex(this, st::defaultInputField, nullptr, QString::number(job.buttonIndex))
-, _delayBetween(this, st::defaultInputField, nullptr, QString::number(job.delayBetweenSecs, 'g', 10)) {
+, _delayBetween(this, st::defaultInputField, nullptr, QString::number(job.delayBetweenSecs, 'g', 10))
+, _startupDelay(this, st::defaultInputField, nullptr, QString::number(job.startupDelaySecs, 'g', 10)) {
 }
 
 void AutomationJobEditBox::prepare() {
@@ -268,6 +286,20 @@ void AutomationJobEditBox::prepare() {
 		static_cast<int>(Automation::RunMode::RunExpiredOnOpen),
 		tr::lng_automation_run_expired(tr::now),
 		st::defaultCheckbox);
+
+	// Startup delay (visible only for RunExpiredOnOpen)
+	_startupDelayLabel = Ui::CreateChild<Ui::FlatLabel>(
+		this,
+		tr::lng_automation_startup_delay(tr::now),
+		st::boxLabel);
+	_startupDelay->resize(w, _startupDelay->height());
+
+	_runModeGroup->setChangedCallback([=](int value) {
+		const auto isExpired = (value == static_cast<int>(Automation::RunMode::RunExpiredOnOpen));
+		_startupDelayLabel->setVisible(isExpired);
+		_startupDelay->setVisible(isExpired);
+		relayout();
+	});
 
 	// Action type
 	_actionLabel = Ui::CreateChild<Ui::FlatLabel>(
@@ -365,6 +397,9 @@ void AutomationJobEditBox::updateActionFields() {
 	_messageText->setVisible(isSend);
 	_btnIdxLabel->setVisible(!isSend);
 	_buttonIndex->setVisible(!isSend);
+	const auto isExpired = (_runModeGroup->current() == static_cast<int>(Automation::RunMode::RunExpiredOnOpen));
+	_startupDelayLabel->setVisible(isExpired);
+	_startupDelay->setVisible(isExpired);
 	relayout();
 }
 
@@ -398,6 +433,9 @@ void AutomationJobEditBox::relayout() {
 	y += _exactBtn->heightNoMargins() + st::boxLittleSkip;
 	_expiredBtn->move(left, y);
 	y += _expiredBtn->heightNoMargins() + st::boxMediumSkip;
+
+	place(_startupDelayLabel);
+	placeMedium(_startupDelay.data());
 
 	place(_actionLabel);
 	_sendBtn->move(left, y);
@@ -536,6 +574,10 @@ void AutomationJobEditBox::save() {
 	bool delayOk = false;
 	const double delayVal = _delayBetween->getLastText().trimmed().toDouble(&delayOk);
 	_job.delayBetweenSecs = (delayOk && delayVal >= 0) ? delayVal : 0.0;
+
+	bool startupDelayOk = false;
+	const double startupDelayVal = _startupDelay->getLastText().trimmed().toDouble(&startupDelayOk);
+	_job.startupDelaySecs = (startupDelayOk && startupDelayVal >= 0) ? startupDelayVal : 0.0;
 
 	if (_job.name.isEmpty()) {
 		_name->showError();

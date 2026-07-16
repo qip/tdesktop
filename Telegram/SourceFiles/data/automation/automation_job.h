@@ -32,6 +32,7 @@ struct AutomationJob {
 	QString messageText;
 	int buttonIndex = 0;
 	bool dismissPopup = false;
+	double startupDelaySecs = 0.0;
 	bool enabled = true;
 	int64 lastRunTime = 0;
 };

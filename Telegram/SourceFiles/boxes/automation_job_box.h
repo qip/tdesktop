@@ -79,12 +79,14 @@ private:
 	Ui::FlatLabel *_msgLabel = nullptr;
 	Ui::FlatLabel *_btnIdxLabel = nullptr;
 	Ui::FlatLabel *_delayLabel = nullptr;
+	Ui::FlatLabel *_startupDelayLabel = nullptr;
 
 	object_ptr<Ui::InputField> _name = {nullptr};
 	object_ptr<Ui::InputField> _cronExpr = {nullptr};
 	object_ptr<Ui::InputField> _messageText = {nullptr};
 	object_ptr<Ui::InputField> _buttonIndex = {nullptr};
 	object_ptr<Ui::InputField> _delayBetween = {nullptr};
+	object_ptr<Ui::InputField> _startupDelay = {nullptr};
 	object_ptr<Ui::Checkbox> _dismissPopup = {nullptr};
 	object_ptr<Ui::Checkbox> _enabled = {nullptr};
 	Ui::LinkButton *_chatSelectBtn = nullptr;

@@ -44,6 +44,7 @@ void AutomationEngine::start() {
 		return;
 	}
 	_running = true;
+	_lastCheckExpiredTime = QDateTime::currentSecsSinceEpoch();
 	checkExpired();
 	_tickTimer.callEach(60 * 1000);
 }
@@ -55,6 +56,15 @@ void AutomationEngine::stop() {
 
 void AutomationEngine::reload() {
 	// no-op: jobs are read from EnhancedSettings on each tick
+}
+
+void AutomationEngine::checkExpiredIfNeeded() {
+	const auto now = QDateTime::currentSecsSinceEpoch();
+	if (now - _lastCheckExpiredTime < 30) {
+		return;
+	}
+	_lastCheckExpiredTime = now;
+	checkExpired();
 }
 
 void AutomationEngine::tick() {
@@ -90,17 +100,39 @@ void AutomationEngine::checkExpired() {
 		if (job.runMode != RunMode::RunExpiredOnOpen) {
 			continue;
 		}
+		bool shouldRun = false;
 		if (job.lastRunTime <= 0) {
-			// Never ran before -- run now.
-			executeJob(job);
-			EnhancedSettings::UpdateAutomationJobLastRun(job.id, nowUnix);
-			continue;
+			shouldRun = true;
+		} else {
+			const auto lastRun = QDateTime::fromSecsSinceEpoch(job.lastRunTime);
+			const auto next = CronNextMatch(job.cronExpr, lastRun);
+			if (next.isValid() && next <= now) {
+				shouldRun = true;
+			}
 		}
-		const auto lastRun = QDateTime::fromSecsSinceEpoch(job.lastRunTime);
-		const auto next = CronNextMatch(job.cronExpr, lastRun);
-		if (next.isValid() && next <= now) {
+		if (shouldRun) {
+			const auto delayMs = static_cast<crl::time>(job.startupDelaySecs * 1000);
+			const auto jobId = job.id;
+			const auto run = [=, this, j = job]() mutable {
+				executeJob(j);
+				EnhancedSettings::UpdateAutomationJobLastRun(jobId, QDateTime::currentSecsSinceEpoch());
+			};
+			if (delayMs > 0) {
+				base::call_delayed(delayMs, run);
+			} else {
+				run();
+			}
+		}
+	}
+}
+
+void AutomationEngine::runJobNow(const QString &jobId) {
+	auto jobs = EnhancedSettings::GetAutomationJobs();
+	for (auto &job : jobs) {
+		if (job.id == jobId) {
 			executeJob(job);
-			EnhancedSettings::UpdateAutomationJobLastRun(job.id, nowUnix);
+			EnhancedSettings::UpdateAutomationJobLastRun(job.id, QDateTime::currentSecsSinceEpoch());
+			return;
 		}
 	}
 }

@@ -8539,4 +8539,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_automation_enabled" = "Enabled";
 "lng_automation_delay_between" = "Delay between chats (seconds)";
 "lng_automation_chats_selected" = "{num} chat(s) selected";
+"lng_automation_startup_delay" = "Startup delay (seconds)";
+"lng_automation_run_now" = "Run Now";
 // Keys finished
