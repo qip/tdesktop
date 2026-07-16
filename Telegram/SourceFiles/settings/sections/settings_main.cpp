@@ -31,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "info/profile/info_profile_badge.h"
 #include "info/profile/info_profile_emoji_status_panel.h"
+#include "info/profile/info_profile_phone_menu.h"
 #include "info/profile/info_profile_values.h"
 #include "lang/lang_cloud_manager.h"
 #include "lang/lang_instance.h"
@@ -173,10 +174,8 @@ Cover::Cover(
 	const auto hook = [=](Ui::FlatLabel::ContextMenuRequest request) {
 		if (request.selection.empty()) {
 			const auto callback = [=] {
-				auto phone = rpl::variable<TextWithEntities>(
-					Info::Profile::PhoneValue(_user)).current().text;
-				phone.replace(' ', QString()).replace('-', QString());
-				TextUtilities::SetClipboardText({ phone });
+				Info::Profile::CopyPhoneToClipboard(
+					Info::Profile::PhoneValue(_user));
 			};
 			request.menu->addAction(
 				tr::lng_profile_copy_phone(tr::now),
@@ -185,19 +184,7 @@ Cover::Cover(
 		} else {
 			_phone->fillContextMenu(request);
 		}
-		const auto hidden = _user->session().settings().phoneNumberHidden();
-		const auto toggle = [=] {
-			_user->session().settings().setPhoneNumberHidden(
-				!_user->session().settings().phoneNumberHidden());
-			_user->session().saveSettingsDelayed();
-			updatePhoneText();
-		};
-		Menu::AddCheckedAction(
-			request.menu,
-			tr::lng_context_spoiler_effect(tr::now),
-			toggle,
-			&st::menuIconSpoiler,
-			hidden);
+		Info::Profile::AddPhoneSpoilerMenu(request.menu, _user);
 	};
 	_phone->setContextMenuHook(hook);
 
@@ -279,6 +266,11 @@ void Cover::initViewers() {
 			_phone->setText(tr::lng_info_mobile_hidden(tr::now));
 		}
 		refreshPhoneGeometry(width());
+	}, lifetime());
+
+	_user->session().settings().phoneNumberHiddenValue(
+	) | rpl::on_next([=] {
+		updatePhoneText();
 	}, lifetime());
 
 	Info::Profile::UsernameValue(
@@ -894,6 +886,7 @@ void SetupValidatePhoneNumberSuggestion(
 		wrap,
 		tr::lng_box_yes(),
 		st::inviteLinkButton);
+	yes->setFullRadius(true);
 	yes->setClickedCallback([=] {
 		controller->session().promoSuggestions().dismiss(
 			kSugValidatePhone.utf8());
@@ -903,6 +896,7 @@ void SetupValidatePhoneNumberSuggestion(
 		wrap,
 		tr::lng_box_no(),
 		st::inviteLinkButton);
+	no->setFullRadius(true);
 	no->setClickedCallback([=] {
 		const auto sharedLabel = std::make_shared<base::weak_qptr<Ui::FlatLabel>>();
 		const auto height = st::boxLabel.style.font->height;
@@ -994,6 +988,7 @@ void SetupValidatePasswordSuggestion(
 		wrap,
 		tr::lng_settings_suggestion_password_yes(),
 		st::inviteLinkButton);
+	yes->setFullRadius(true);
 	yes->setClickedCallback([=] {
 		controller->session().promoSuggestions().dismiss(
 			Data::PromoSuggestions::SugValidatePassword());
@@ -1003,6 +998,7 @@ void SetupValidatePasswordSuggestion(
 		wrap,
 		tr::lng_settings_suggestion_password_no(),
 		st::inviteLinkButton);
+	no->setFullRadius(true);
 	no->setClickedCallback([=] {
 		showOther(Settings::CloudPasswordSuggestionInputId());
 	});

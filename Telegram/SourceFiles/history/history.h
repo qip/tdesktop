@@ -53,6 +53,12 @@ enum class NewMessageType {
 	Existing,
 };
 
+enum class NewAddType : uchar {
+	Outgoing,
+	RegularIncoming,
+	StreamedDraftFinish,
+};
+
 class History final : public Data::Thread {
 public:
 	using Element = HistoryView::Element;
@@ -198,7 +204,7 @@ public:
 	void addOlderSlice(const QVector<MTPMessage> &slice);
 	void addNewerSlice(const QVector<MTPMessage> &slice);
 
-	void newItemAdded(not_null<HistoryItem*> item);
+	void newItemAdded(not_null<HistoryItem*> item, NewAddType type);
 
 	void registerClientSideMessage(not_null<HistoryItem*> item);
 	void unregisterClientSideMessage(not_null<HistoryItem*> item);
@@ -246,6 +252,8 @@ public:
 	[[nodiscard]] bool loadedAtBottom() const; // last message is in the list
 	void setNotLoadedAtBottom();
 	[[nodiscard]] bool loadedAtTop() const; // nothing was added after loading history back
+	[[nodiscard]] bool hasGuestChatBotMessages() const;
+	void setHasGuestChatBotMessages();
 	[[nodiscard]] bool isReadyFor(MsgId msgId); // has messages for showing history at msgId
 	void getReadyFor(MsgId msgId);
 
@@ -503,6 +511,7 @@ private:
 		HasPinnedMessages = (1 << 6),
 		ResolveChatListMessage = (1 << 7),
 		MonoAndForumUnreadInvalidatePending = (1 << 8),
+		HasGuestChatBotMessages = (1 << 9),
 	};
 	using Flags = base::flags<Flag>;
 	friend inline constexpr auto is_flag_type(Flag) {
@@ -711,7 +720,9 @@ public:
 
 	std::vector<std::unique_ptr<Element>> messages;
 
-	void remove(not_null<Element*> view);
+	void remove(
+		not_null<Element*> view,
+		Data::ViewRemovalReason reason = Data::ViewRemovalReason::Removed);
 	void refreshView(not_null<Element*> view);
 
 	int resizeGetHeight(int newWidth, ResizeRequest request);
