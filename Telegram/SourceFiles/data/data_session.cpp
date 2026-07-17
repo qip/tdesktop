@@ -2645,6 +2645,9 @@ bool Session::pinnedCanPin(
 }
 
 int Session::pinnedChatsLimit(Data::Folder *folder) const {
+	if (GetEnhancedBool("unlimited_pins")) {
+		return 1000;
+	}
 	const auto limits = Data::PremiumLimits(_session);
 	return folder
 		? limits.dialogsFolderPinnedCurrent()
@@ -2677,6 +2680,9 @@ rpl::producer<int> Session::maxPinnedChatsLimitValue(
 	// premium-ly added chats from the pinned list because of sync issues.
 	return _session->appConfig().value(
 	) | rpl::map([folder, limits = Data::PremiumLimits(_session)] {
+		if (GetEnhancedBool("unlimited_pins")) {
+			return 1000;
+		}
 		return folder
 			? limits.dialogsFolderPinnedPremium()
 			: limits.dialogsPinnedPremium();

@@ -634,6 +634,20 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
+		AddButtonWithIcon(
+				container,
+				rpl::single(QString("Unlimited Pinned Chats")),
+				st::settingsButtonNoIcon
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("unlimited_pins"))
+		)->toggledValue(
+		) | rpl::filter([](bool enabled) {
+			return (enabled != GetEnhancedBool("unlimited_pins"));
+		}) | rpl::on_next([=](bool enabled) {
+			SetEnhancedValue("unlimited_pins", enabled);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
 
 		AddSkip(container);
 	}
