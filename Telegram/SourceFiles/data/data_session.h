@@ -1410,6 +1410,7 @@ private:
 	rpl::event_stream<RecentSelfForwards> _recentSelfForwards;
 	rpl::event_stream<RecentJoinChat> _recentJoinChat;
 
+	bool _localPinsRestored = false;
 	rpl::lifetime _lifetime;
 
 };

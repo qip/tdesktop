@@ -79,4 +79,10 @@ namespace EnhancedSettings {
 	void DeleteAutomationJob(const QString &jobId);
 	void UpdateAutomationJobLastRun(const QString &jobId, int64 timestamp);
 
+	// Local pinned chats persistence
+	[[nodiscard]] QVector<uint64> GetLocalPinnedPeers();
+	void SetLocalPinnedPeers(const QVector<uint64> &peerIds);
+	void AddLocalPinnedPeer(uint64 peerId);
+	void RemoveLocalPinnedPeer(uint64 peerId);
+
 } // namespace EnhancedSettings

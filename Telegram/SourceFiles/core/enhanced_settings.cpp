@@ -29,6 +29,7 @@ namespace EnhancedSettings {
 	QMap<uint64, SoftMuteState> gSoftMuteSettings;
 	// Global automation jobs storage
 	QVector<Automation::AutomationJob> gAutomationJobs;
+	QVector<uint64> gLocalPinnedPeers;
 
 	namespace {
 
@@ -333,6 +334,19 @@ namespace EnhancedSettings {
 			}
 		});
 
+		// Load local pinned peers
+		ReadArrayOption(settings, "local_pinned_peers", [&](const QJsonArray &arr) {
+			gLocalPinnedPeers.clear();
+			for (const auto &item : arr) {
+				const auto id = item.isString()
+					? item.toString().toULongLong()
+					: static_cast<uint64>(item.toDouble());
+				if (id) {
+					gLocalPinnedPeers.append(id);
+				}
+			}
+		});
+
 		return true;
 	}
 
@@ -431,6 +445,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("translate_to_tc"), false);
 		settings.insert(qsl("hide_stories"), false);
 		settings.insert(qsl("hide_sponsored"), false);
+		settings.insert(qsl("unlimited_pins"), false);
 		settings.insert(qsl("recent_display_limit"), 20);
 		settings.insert(qsl("screenshot_mode"), false);
 		settings.insert(qsl("update_url"), "");
@@ -487,6 +502,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("translate_to_tc"), GetEnhancedBool("translate_to_tc"));
 		settings.insert(qsl("hide_stories"), GetEnhancedBool("hide_stories"));
 		settings.insert(qsl("hide_sponsored"), GetEnhancedBool("hide_sponsored"));
+		settings.insert(qsl("unlimited_pins"), GetEnhancedBool("unlimited_pins"));
 		settings.insert(qsl("recent_display_limit"), GetEnhancedInt("recent_display_limit"));
 		settings.insert(qsl("screenshot_mode"), GetEnhancedBool("screenshot_mode"));
 		settings.insert(qsl("update_url"), GetEnhancedString("update_url"));
@@ -562,6 +578,13 @@ namespace EnhancedSettings {
 			jobsArray.append(jobObj);
 		}
 		settings.insert(qsl("automation_jobs"), jobsArray);
+
+		// Write local pinned peers
+		auto pinnedPeersArray = QJsonArray();
+		for (const auto &peerId : gLocalPinnedPeers) {
+			pinnedPeersArray.append(QString::number(peerId));
+		}
+		settings.insert(qsl("local_pinned_peers"), pinnedPeersArray);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -700,6 +723,28 @@ namespace EnhancedSettings {
 				break;
 			}
 		}
+		Write();
+	}
+
+	// Local pinned peers management
+	QVector<uint64> GetLocalPinnedPeers() {
+		return gLocalPinnedPeers;
+	}
+
+	void SetLocalPinnedPeers(const QVector<uint64> &peerIds) {
+		gLocalPinnedPeers = peerIds;
+		Write();
+	}
+
+	void AddLocalPinnedPeer(uint64 peerId) {
+		if (!gLocalPinnedPeers.contains(peerId)) {
+			gLocalPinnedPeers.append(peerId);
+			Write();
+		}
+	}
+
+	void RemoveLocalPinnedPeer(uint64 peerId) {
+		gLocalPinnedPeers.removeAll(peerId);
 		Write();
 	}
 
