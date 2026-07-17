@@ -1195,6 +1195,11 @@ historyUnreadPollVotes: TwoIconButton(historyToDown) {
 }
 historyUnreadThingsSkip: 4px;
 
+historyJumpBack: TwoIconButton(historyToDown) {
+	iconAbove: icon {{ "history_down_arrow-flip_vertical", historyToDownFg, point(0px, 1px) }};
+	iconAboveOver: icon {{ "history_down_arrow-flip_vertical", historyToDownFgOver, point(0px, 1px) }};
+}
+
 historyQuoteStyle: QuoteStyle(defaultQuoteStyle) {
 	padding: margins(10px, 2px, 4px, 2px);
 	verticalSkip: 4px;

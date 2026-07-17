@@ -71,6 +71,8 @@ QByteArray SessionSettings::serialize() const {
 	size += sizeof(qint32)
 		+ _subsectionTabsModes.size() * (sizeof(quint64) + sizeof(qint32));
 	size += sizeof(qint32); // _phoneNumberHidden
+	size += sizeof(qint32)
+		+ _localReadPositions.size() * (sizeof(quint64) + sizeof(qint64));
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -159,6 +161,10 @@ QByteArray SessionSettings::serialize() const {
 			stream << SerializePeerId(peerId) << qint32(mode);
 		}
 		stream << qint32(_phoneNumberHidden.current() ? 1 : 0);
+		stream << qint32(_localReadPositions.size());
+		for (const auto &[peerId, msgId] : _localReadPositions) {
+			stream << SerializePeerId(peerId) << qint64(msgId.bare);
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -234,6 +240,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	std::vector<int32> moderateCommonGroups;
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
+	base::flat_map<PeerId, MsgId> localReadPositions;
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -692,6 +699,25 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	if (!stream.atEnd()) {
 		stream >> phoneNumberHidden;
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok && count >= 0 && count < 10000) {
+			for (auto i = 0; i != count; ++i) {
+				auto peerId = quint64();
+				auto msgId = qint64();
+				stream >> peerId >> msgId;
+				if (stream.status() != QDataStream::Ok) {
+					LOG(("App Error: "
+						"Bad data for SessionSettings::addFromSerialized()"));
+					return;
+				}
+				localReadPositions.emplace(
+					DeserializePeerId(peerId),
+					MsgId(msgId));
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -758,6 +784,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_moderateCommonGroups = std::move(moderateCommonGroups);
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
+	_localReadPositions = std::move(localReadPositions);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);
@@ -1007,6 +1034,24 @@ void SessionSettings::setSetupEmailState(Data::SetupEmailState state) {
 
 Data::SetupEmailState SessionSettings::setupEmailState() const {
 	return _setupEmailState;
+}
+
+
+MsgId SessionSettings::localReadPosition(PeerId peerId) const {
+	const auto i = _localReadPositions.find(peerId);
+	return (i != end(_localReadPositions)) ? i->second : MsgId(0);
+}
+
+void SessionSettings::setLocalReadPosition(PeerId peerId, MsgId msgId) {
+	if (msgId) {
+		_localReadPositions[peerId] = msgId;
+	} else {
+		_localReadPositions.remove(peerId);
+	}
+}
+
+void SessionSettings::clearLocalReadPosition(PeerId peerId) {
+	_localReadPositions.remove(peerId);
 }
 
 } // namespace Main

@@ -71,11 +71,15 @@ CornerButtons::CornerButtons(
 		st->value(_stLifetime, st::historyUnreadReactions))
 , _pollVotes(
 		parent,
-		st->value(_stLifetime, st::historyUnreadPollVotes)) {
+		st->value(_stLifetime, st::historyUnreadPollVotes))
+, _jumpBack(
+		parent,
+		st->value(_stLifetime, st::historyJumpBack)) {
 	_down.widget->addClickHandler([=] { downClick(); });
 	_mentions.widget->addClickHandler([=] { mentionsClick(); });
 	_reactions.widget->addClickHandler([=] { reactionsClick(); });
 	_pollVotes.widget->addClickHandler([=] { pollVotesClick(); });
+	_jumpBack.widget->addClickHandler([=] { jumpBackClick(); });
 
 	const auto filterScroll = [&](CornerButton &button) {
 		button.widget->installEventFilter(this);
@@ -84,6 +88,7 @@ CornerButtons::CornerButtons(
 	filterScroll(_mentions);
 	filterScroll(_reactions);
 	filterScroll(_pollVotes);
+	filterScroll(_jumpBack);
 
 	SendMenu::SetupUnreadMentionsMenu(_mentions.widget.data(), [=] {
 		return _delegate->cornerButtonsThread();
@@ -99,6 +104,7 @@ CornerButtons::CornerButtons(
 bool CornerButtons::eventFilter(QObject *o, QEvent *e) {
 	if (e->type() == QEvent::Wheel
 		&& (o == _down.widget
+			|| o == _jumpBack.widget
 			|| o == _mentions.widget
 			|| o == _reactions.widget
 			|| o == _pollVotes.widget)) {
@@ -109,10 +115,25 @@ bool CornerButtons::eventFilter(QObject *o, QEvent *e) {
 
 void CornerButtons::downClick() {
 	if (base::IsCtrlPressed() || !_replyReturn) {
+		const auto currentId = _delegate->cornerButtonsCurrentId();
+		if (currentId) {
+			_savedPosition = currentId;
+			updateJumpBackVisibility();
+		}
 		_delegate->cornerButtonsShowAtPosition(Data::UnreadMessagePosition);
 	} else {
 		_delegate->cornerButtonsShowAtPosition(_replyReturn->position());
 	}
+}
+
+void CornerButtons::jumpBackClick() {
+	if (const auto thread = _delegate->cornerButtonsThread()) {
+		if (const auto item = thread->owner().message(_savedPosition)) {
+			_delegate->cornerButtonsShowAtPosition(item->position());
+		}
+	}
+	_savedPosition = FullMsgId();
+	updateJumpBackVisibility();
 }
 
 void CornerButtons::mentionsClick() {
@@ -163,6 +184,8 @@ void CornerButtons::pollVotesClick() {
 void CornerButtons::clearReplyReturns() {
 	_replyReturns.clear();
 	_replyReturn = nullptr;
+	_savedPosition = FullMsgId();
+	updateJumpBackVisibility();
 }
 
 QVector<FullMsgId> CornerButtons::replyReturns() const {
@@ -321,6 +344,19 @@ void CornerButtons::updateJumpDownVisibility(std::optional<int> counter) {
 	}
 }
 
+void CornerButtons::updateJumpBackVisibility() {
+	const auto shown = !!_savedPosition
+		&& !_delegate->cornerButtonsIgnoreVisibility();
+	if (_jumpBack.shown != shown) {
+		_jumpBack.shown = shown;
+		_jumpBack.animation.start(
+			[=] { updatePositions(); },
+			shown ? 0. : 1.,
+			shown ? 1. : 0.,
+			st::historyToDownDuration);
+	}
+}
+
 void CornerButtons::updatePositions() {
 	const auto checkVisibility = [](CornerButton &button) {
 		const auto shouldBeHidden = !button.shown
@@ -339,6 +375,7 @@ void CornerButtons::updatePositions() {
 	const auto unreadMentionsShown = shown(_mentions);
 	const auto unreadReactionsShown = shown(_reactions);
 	const auto unreadPollVotesShown = shown(_pollVotes);
+	const auto jumpBackShown = shown(_jumpBack);
 	const auto skip = st::historyUnreadThingsSkip;
 	{
 		const auto top = anim::interpolate(
@@ -351,13 +388,32 @@ void CornerButtons::updatePositions() {
 	}
 	{
 		const auto right = anim::interpolate(
+			-_jumpBack.widget->width(),
+			st::historyToDownPosition.x(),
+			jumpBackShown);
+		const auto shift = anim::interpolate(
+			0,
+			_down.widget->height() + skip,
+			historyDownShown);
+		const auto top = _parent->height()
+			- _jumpBack.widget->height()
+			- st::historyToDownPosition.y()
+			- shift;
+		_jumpBack.widget->moveToRight(right, top);
+	}
+	{
+		const auto right = anim::interpolate(
 			-_mentions.widget->width(),
 			st::historyToDownPosition.x(),
 			unreadMentionsShown);
 		const auto shift = anim::interpolate(
 			0,
 			_down.widget->height() + skip,
-			historyDownShown);
+			historyDownShown
+		) + anim::interpolate(
+			0,
+			_jumpBack.widget->height() + skip,
+			jumpBackShown);
 		const auto top = _parent->height()
 			- _mentions.widget->height()
 			- st::historyToDownPosition.y()
@@ -373,6 +429,10 @@ void CornerButtons::updatePositions() {
 			0,
 			_down.widget->height() + skip,
 			historyDownShown
+		) + anim::interpolate(
+			0,
+			_jumpBack.widget->height() + skip,
+			jumpBackShown
 		) + anim::interpolate(
 			0,
 			_mentions.widget->height() + skip,
@@ -394,6 +454,10 @@ void CornerButtons::updatePositions() {
 			historyDownShown
 		) + anim::interpolate(
 			0,
+			_jumpBack.widget->height() + skip,
+			jumpBackShown
+		) + anim::interpolate(
+			0,
 			_mentions.widget->height() + skip,
 			unreadMentionsShown
 		) + anim::interpolate(
@@ -408,6 +472,7 @@ void CornerButtons::updatePositions() {
 	}
 
 	checkVisibility(_down);
+	checkVisibility(_jumpBack);
 	checkVisibility(_mentions);
 	checkVisibility(_reactions);
 	checkVisibility(_pollVotes);
@@ -418,6 +483,7 @@ void CornerButtons::finishAnimations() {
 	_mentions.animation.stop();
 	_reactions.animation.stop();
 	_pollVotes.animation.stop();
+	_jumpBack.animation.stop();
 	updatePositions();
 }
 

@@ -1340,6 +1340,36 @@ void AddTopMessageActions(
 	AddPinMessageAction(menu, request, list);
 }
 
+void AddLocalReadPositionAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	const auto item = request.item;
+	if (!item || !item->isRegular()) {
+		return;
+	}
+	const auto context = list->elementContext();
+	if (context != Context::History
+		&& context != Context::Replies) {
+		return;
+	}
+	const auto session = &item->history()->session();
+	const auto peerId = item->history()->peer->id;
+	const auto msgId = item->id;
+
+	menu->addAction(tr::lng_context_set_local_read(tr::now), [=] {
+		session->settings().setLocalReadPosition(peerId, msgId);
+		session->saveSettingsDelayed();
+	}, &st::menuIconMarkRead);
+
+	if (session->settings().localReadPosition(peerId)) {
+		menu->addAction(tr::lng_context_clear_local_read(tr::now), [=] {
+			session->settings().clearLocalReadPosition(peerId);
+			session->saveSettingsDelayed();
+		}, &st::menuIconMarkUnread);
+	}
+}
+
 void AddMessageActions(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
@@ -1836,6 +1866,7 @@ void FillContextMenuItems(
 
 	AddCopyLinkAction(result, link);
 	AddMessageActions(result, request, list);
+	AddLocalReadPositionAction(result, request, list);
 
 	const auto wasAmount = result->actions().size();
 	if (const auto textItem = view ? view->textItem() : item) {
