@@ -79,6 +79,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 #include "data/data_peer_values.h"
 #include "data/data_premium_limits.h"
+#include "core/enhanced_settings.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
 #include "data/data_todo_list.h"
@@ -274,6 +275,54 @@ Session::Session(not_null<Main::Session*> session)
 			_cache->clearByTag(Data::kImageCacheTag);
 		}
 	}
+
+	// Restore local pinned chats order after dialogs are loaded
+	chatsListLoadedEvents(
+	) | rpl::on_next([=](Data::Folder *folder) {
+		if (folder || !GetEnhancedBool("unlimited_pins")) {
+			return;
+		}
+		const auto savedOrder = EnhancedSettings::GetLocalPinnedPeers();
+		if (savedOrder.isEmpty()) {
+			_localPinsRestored = true;
+			return;
+		}
+		const auto list = chatsList(nullptr)->pinned();
+		auto desired = std::vector<Dialogs::Key>();
+		for (const auto &peerId : savedOrder) {
+			if (const auto history = historyLoaded(PeerId(peerId))) {
+				desired.emplace_back(history);
+			}
+		}
+		for (const auto &key : list->order()) {
+			if (!ranges::contains(desired, key)) {
+				desired.emplace_back(key);
+			}
+		}
+		list->clear();
+		for (const auto &key : desired) {
+			list->addPinned(key);
+		}
+		_localPinsRestored = true;
+		notifyPinnedDialogsOrderUpdated();
+	}, _lifetime);
+
+	// Save pinned order whenever it changes
+	pinnedDialogsOrderUpdated(
+	) | rpl::on_next([=] {
+		if (!_localPinsRestored || !GetEnhancedBool("unlimited_pins")) {
+			return;
+		}
+		const auto &order = pinnedChatsOrder(nullptr);
+		auto peerIds = QVector<uint64>();
+		peerIds.reserve(order.size());
+		for (const auto &key : order) {
+			if (const auto history = key.history()) {
+				peerIds.append(history->peer->id.value);
+			}
+		}
+		EnhancedSettings::SetLocalPinnedPeers(peerIds);
+	}, _lifetime);
 
 	setupMigrationViewer();
 	setupChannelLeavingViewer();
@@ -2525,6 +2574,7 @@ void Session::setChatPinned(
 		: chatsListFor(key.entry()))->pinned();
 	list->setPinned(key, pinned);
 	notifyPinnedDialogsOrderUpdated();
+
 }
 
 void Session::setPinnedFromEntryList(Dialogs::Key key, bool pinned) {

@@ -29,6 +29,7 @@ namespace EnhancedSettings {
 	QMap<uint64, SoftMuteState> gSoftMuteSettings;
 	// Global automation jobs storage
 	QVector<Automation::AutomationJob> gAutomationJobs;
+	QVector<uint64> gLocalPinnedPeers;
 
 	namespace {
 
@@ -333,6 +334,19 @@ namespace EnhancedSettings {
 			}
 		});
 
+		// Load local pinned peers
+		ReadArrayOption(settings, "local_pinned_peers", [&](const QJsonArray &arr) {
+			gLocalPinnedPeers.clear();
+			for (const auto &item : arr) {
+				const auto id = item.isString()
+					? item.toString().toULongLong()
+					: static_cast<uint64>(item.toDouble());
+				if (id) {
+					gLocalPinnedPeers.append(id);
+				}
+			}
+		});
+
 		return true;
 	}
 
@@ -565,6 +579,13 @@ namespace EnhancedSettings {
 		}
 		settings.insert(qsl("automation_jobs"), jobsArray);
 
+		// Write local pinned peers
+		auto pinnedPeersArray = QJsonArray();
+		for (const auto &peerId : gLocalPinnedPeers) {
+			pinnedPeersArray.append(QString::number(peerId));
+		}
+		settings.insert(qsl("local_pinned_peers"), pinnedPeersArray);
+
 		auto document = QJsonDocument();
 		document.setObject(settings);
 		file.write(document.toJson(QJsonDocument::Indented));
@@ -702,6 +723,28 @@ namespace EnhancedSettings {
 				break;
 			}
 		}
+		Write();
+	}
+
+	// Local pinned peers management
+	QVector<uint64> GetLocalPinnedPeers() {
+		return gLocalPinnedPeers;
+	}
+
+	void SetLocalPinnedPeers(const QVector<uint64> &peerIds) {
+		gLocalPinnedPeers = peerIds;
+		Write();
+	}
+
+	void AddLocalPinnedPeer(uint64 peerId) {
+		if (!gLocalPinnedPeers.contains(peerId)) {
+			gLocalPinnedPeers.append(peerId);
+			Write();
+		}
+	}
+
+	void RemoveLocalPinnedPeer(uint64 peerId) {
+		gLocalPinnedPeers.removeAll(peerId);
 		Write();
 	}
 
