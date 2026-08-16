@@ -2766,6 +2766,9 @@ void HistoryWidget::showHistory(
 		}
 
 		_history->showAtMsgId = _showAtMsgId;
+		if (session().settings().localReadPosition(_peer->id)) {
+			session().saveSettingsDelayed(100);
+		}
 
 		destroyUnreadBarOnClose();
 		_sponsoredMessageBar = nullptr;
@@ -2896,6 +2899,11 @@ void HistoryWidget::showHistory(
 			_chooseForReport = nullptr;
 		}
 		if (_showAtMsgId == ShowAtUnreadMsgId
+			&& !_history->scrollTopItem
+			&& !_history->isEmpty()) {
+			_history->clear(History::ClearType::Unload);
+		}
+		if (_showAtMsgId == ShowAtUnreadMsgId
 			&& !_history->trackUnreadMessages()
 			&& !hasSavedScroll()) {
 			_showAtMsgId = ShowAtTheEndMsgId;
@@ -2918,6 +2926,11 @@ void HistoryWidget::showHistory(
 		if (_showAtMsgId == ShowAtUnreadMsgId) {
 			if (_history->scrollTopItem) {
 				_showAtMsgId = _history->showAtMsgId;
+			} else if (_history->isEmpty()) {
+				const auto localRead = session().settings().localReadPosition(_peer->id);
+				if (localRead) {
+					_showAtMsgId = localRead;
+				}
 			}
 		} else {
 			_history->forgetScrollState();
@@ -3580,6 +3593,7 @@ void HistoryWidget::updateControlsVisibility() {
 		_topBar->setVisible(_peer != nullptr);
 	}
 	_cornerButtons.updateJumpDownVisibility();
+	_cornerButtons.updateJumpBackVisibility();
 	_cornerButtons.updateUnreadThingsVisibility();
 	if (!_history || _showAnimation) {
 		hideChildWidgets();
@@ -4658,7 +4672,26 @@ void HistoryWidget::preloadHistoryIfNeeded() {
 	}
 
 	_cornerButtons.updateJumpDownVisibility();
+	_cornerButtons.updateJumpBackVisibility();
 	_cornerButtons.updateUnreadThingsVisibility();
+	if (_peer && _history && _history->scrollTopItem) {
+		auto &settings = session().settings();
+		const auto localRead = settings.localReadPosition(_peer->id);
+		if (localRead) {
+			const auto item = _history->scrollTopItem->data();
+			if (item->isRegular() && item->id > localRead) {
+				const auto cloudRead = _history->inboxReadTillId();
+				if (item->id >= cloudRead) {
+					settings.clearLocalReadPosition(_peer->id);
+					_history->forgetScrollState();
+				} else {
+					settings.setLocalReadPosition(
+						_peer->id,
+						item->id);
+				}
+			}
+		}
+	}
 	if (!_scrollToAnimation.animating()) {
 		preloadHistoryByScroll();
 		checkReplyReturns();
@@ -5543,11 +5576,17 @@ Data::Thread *HistoryWidget::cornerButtonsThread() {
 }
 
 FullMsgId HistoryWidget::cornerButtonsCurrentId() {
-	return (_migrated && _showAtMsgId < 0)
-		? FullMsgId(_migrated->peer->id, -_showAtMsgId)
-		: (_history && _showAtMsgId > 0)
-		? FullMsgId(_history->peer->id, _showAtMsgId)
-		: FullMsgId();
+	if (_migrated && _showAtMsgId < 0) {
+		return FullMsgId(_migrated->peer->id, -_showAtMsgId);
+	} else if (_history && IsServerMsgId(_showAtMsgId)) {
+		return FullMsgId(_history->peer->id, _showAtMsgId);
+	} else if (_history && _history->scrollTopItem) {
+		const auto item = _history->scrollTopItem->data();
+		if (item->isRegular()) {
+			return item->fullId();
+		}
+	}
+	return FullMsgId();
 }
 
 bool HistoryWidget::checkSendPayment(

@@ -2914,6 +2914,7 @@ void ChatWidget::updateInnerVisibleArea() {
 	updatePinnedVisibility();
 	updatePinnedViewer();
 	_cornerButtons.updateJumpDownVisibility();
+	_cornerButtons.updateJumpBackVisibility();
 	_cornerButtons.updateUnreadThingsVisibility();
 	if (_lastScrollTop != scrollTop) {
 		if (!_synteticScrollEvent) {

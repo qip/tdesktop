@@ -3920,6 +3920,21 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		}
 	}
 
+	if (_dragStateItem && _dragStateItem->isRegular()) {
+		const auto peerId = _dragStateItem->history()->peer->id;
+		const auto msgId = _dragStateItem->id;
+		_menu->addAction(tr::lng_context_set_local_read(tr::now), [=] {
+			session->settings().setLocalReadPosition(peerId, msgId);
+			session->saveSettingsDelayed();
+		}, &st::menuIconMarkRead);
+		if (session->settings().localReadPosition(peerId)) {
+			_menu->addAction(tr::lng_context_clear_local_read(tr::now), [=] {
+				session->settings().clearLocalReadPosition(peerId);
+				session->saveSettingsDelayed();
+			}, &st::menuIconMarkUnread);
+		}
+	}
+
 	if (_dragStateItem) {
 		const auto view = viewByItem(_dragStateItem);
 		const auto textItem = view ? view->textItem() : _dragStateItem;

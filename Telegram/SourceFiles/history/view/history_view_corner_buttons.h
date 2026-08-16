@@ -71,6 +71,7 @@ public:
 	using Type = CornerButtonType;
 
 	void downClick();
+	void jumpBackClick();
 	void mentionsClick();
 	void reactionsClick();
 	void pollVotesClick();
@@ -85,9 +86,14 @@ public:
 	void updateVisibility(Type type, bool shown);
 	void updateUnreadThingsVisibility();
 	void updateJumpDownVisibility(std::optional<int> counter = {});
+	void updateJumpBackVisibility();
 	void updatePositions();
 
 	void finishAnimations();
+
+	[[nodiscard]] bool hasSavedPosition() const {
+		return !!_savedPosition;
+	}
 
 	[[nodiscard]] HistoryItem *replyReturn() const {
 		return _replyReturn;
@@ -122,9 +128,12 @@ private:
 	CornerButton _mentions;
 	CornerButton _reactions;
 	CornerButton _pollVotes;
+	CornerButton _jumpBack;
 
 	HistoryItem *_replyReturn = nullptr;
 	QVector<FullMsgId> _replyReturns;
+
+	FullMsgId _savedPosition;
 
 	bool _replyReturnStarted = false;
 

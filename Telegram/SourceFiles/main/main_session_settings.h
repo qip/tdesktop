@@ -127,6 +127,10 @@ public:
 	[[nodiscard]] qint32 subsectionTabsMode(PeerId peerId) const;
 	void setSubsectionTabsMode(PeerId peerId, qint32 mode);
 
+	[[nodiscard]] MsgId localReadPosition(PeerId peerId) const;
+	void setLocalReadPosition(PeerId peerId, MsgId msgId);
+	void clearLocalReadPosition(PeerId peerId);
+
 	[[nodiscard]] bool dialogsFiltersEnabled() const {
 		return _dialogsFiltersEnabled;
 	}
@@ -222,6 +226,7 @@ private:
 	rpl::variable<bool> _skipArchiveInSearch = false;
 	base::flat_map<ThreadId, MsgId> _hiddenPinnedMessages;
 	base::flat_map<PeerId, qint32> _subsectionTabsModes;
+	base::flat_map<PeerId, MsgId> _localReadPositions;
 	base::flat_map<Data::DefaultNotify, ushort> _ringtoneDefaultVolumes;
 	base::flat_map<ThreadId, ushort> _ringtoneVolumes;
 	bool _dialogsFiltersEnabled = false;
