@@ -44,7 +44,7 @@ void AutomationEngine::start() {
 		return;
 	}
 	_running = true;
-	_lastCheckExpiredTime = QDateTime::currentSecsSinceEpoch();
+	_lastCheckExpired = crl::now();
 	checkExpired();
 	_tickTimer.callEach(60 * 1000);
 }
@@ -54,23 +54,19 @@ void AutomationEngine::stop() {
 	_tickTimer.cancel();
 }
 
-void AutomationEngine::reload() {
-	// no-op: jobs are read from EnhancedSettings on each tick
-}
-
 void AutomationEngine::checkExpiredIfNeeded() {
-	const auto now = QDateTime::currentSecsSinceEpoch();
-	if (now - _lastCheckExpiredTime < 30) {
+	const auto now = crl::now();
+	if (_lastCheckExpired && (now - _lastCheckExpired < 30 * crl::time(1000))) {
 		return;
 	}
-	_lastCheckExpiredTime = now;
+	_lastCheckExpired = now;
 	checkExpired();
 }
 
 void AutomationEngine::tick() {
 	const auto now = QDateTime::currentDateTime();
-	auto jobs = EnhancedSettings::GetAutomationJobs();
-	for (auto &job : jobs) {
+	const auto jobs = EnhancedSettings::GetAutomationJobs();
+	for (const auto &job : jobs) {
 		if (!job.enabled) {
 			continue;
 		}
@@ -83,8 +79,9 @@ void AutomationEngine::tick() {
 				&& lastRunDt.time().minute() == now.time().minute()) {
 				continue;
 			}
-			executeJob(job);
-			EnhancedSettings::UpdateAutomationJobLastRun(job.id, nowUnix);
+			if (executeJob(job)) {
+				EnhancedSettings::UpdateAutomationJobLastRun(job.id, nowUnix);
+			}
 		}
 	}
 }
@@ -92,8 +89,8 @@ void AutomationEngine::tick() {
 void AutomationEngine::checkExpired() {
 	const auto now = QDateTime::currentDateTime();
 	const auto nowUnix = now.toSecsSinceEpoch();
-	auto jobs = EnhancedSettings::GetAutomationJobs();
-	for (auto &job : jobs) {
+	const auto jobs = EnhancedSettings::GetAutomationJobs();
+	for (const auto &job : jobs) {
 		if (!job.enabled) {
 			continue;
 		}
@@ -113,12 +110,22 @@ void AutomationEngine::checkExpired() {
 		if (shouldRun) {
 			const auto delayMs = static_cast<crl::time>(job.startupDelaySecs * 1000);
 			const auto jobId = job.id;
-			auto run = [=, this, j = job]() mutable {
-				executeJob(j);
-				EnhancedSettings::UpdateAutomationJobLastRun(jobId, QDateTime::currentSecsSinceEpoch());
+			if (_scheduled.contains(jobId)) {
+				continue;
+			}
+			auto run = [this, jobId, j = job] {
+				_scheduled.remove(jobId);
+				if (executeJob(j)) {
+					EnhancedSettings::UpdateAutomationJobLastRun(
+						jobId,
+						QDateTime::currentSecsSinceEpoch());
+				}
 			};
 			if (delayMs > 0) {
-				base::call_delayed(delayMs, std::move(run));
+				_scheduled.emplace(jobId);
+				base::call_delayed(
+					delayMs,
+					crl::guard(this, std::move(run)));
 			} else {
 				run();
 			}
@@ -127,25 +134,27 @@ void AutomationEngine::checkExpired() {
 }
 
 void AutomationEngine::runJobNow(const QString &jobId) {
-	auto jobs = EnhancedSettings::GetAutomationJobs();
-	for (auto &job : jobs) {
+	const auto jobs = EnhancedSettings::GetAutomationJobs();
+	for (const auto &job : jobs) {
 		if (job.id == jobId) {
-			executeJob(job);
-			EnhancedSettings::UpdateAutomationJobLastRun(job.id, QDateTime::currentSecsSinceEpoch());
+			if (executeJob(job)) {
+				EnhancedSettings::UpdateAutomationJobLastRun(
+					job.id,
+					QDateTime::currentSecsSinceEpoch());
+			}
 			return;
 		}
 	}
 }
 
-void AutomationEngine::executeJob(AutomationJob &job) {
+bool AutomationEngine::executeJob(const AutomationJob &job) {
 	switch (job.actionType) {
 	case ActionType::SendMessage:
-		executeSendMessage(job);
-		break;
+		return executeSendMessage(job);
 	case ActionType::ClickButton:
-		executeClickButton(job);
-		break;
+		return executeClickButton(job);
 	}
+	return false;
 }
 
 Window::SessionController *AutomationEngine::findSessionController() const {
@@ -159,10 +168,11 @@ Window::SessionController *AutomationEngine::findSessionController() const {
 	return window->sessionController();
 }
 
-void AutomationEngine::executeSendMessage(AutomationJob &job) {
+bool AutomationEngine::executeSendMessage(const AutomationJob &job) {
 	const auto controller = findSessionController();
-	if (!controller) {
-		return;
+	if (!controller || job.peerIds.isEmpty()) {
+		// Nothing was dispatched, so the caller must not mark this as run.
+		return false;
 	}
 	const auto delayMs = static_cast<crl::time>(job.delayBetweenSecs * 1000);
 	for (int i = 0; i < job.peerIds.size(); ++i) {
@@ -194,17 +204,19 @@ void AutomationEngine::executeSendMessage(AutomationJob &job) {
 			}
 		};
 		if (scheduleMs > 0) {
-			base::call_delayed(scheduleMs, action);
+			base::call_delayed(scheduleMs, crl::guard(this, action));
 		} else {
 			action();
 		}
 	}
+	return true;
 }
 
-void AutomationEngine::executeClickButton(AutomationJob &job) {
+bool AutomationEngine::executeClickButton(const AutomationJob &job) {
 	const auto controller = findSessionController();
-	if (!controller) {
-		return;
+	if (!controller || job.peerIds.isEmpty()) {
+		// Nothing was dispatched, so the caller must not mark this as run.
+		return false;
 	}
 	const auto delayMs = static_cast<crl::time>(job.delayBetweenSecs * 1000);
 	for (int i = 0; i < job.peerIds.size(); ++i) {
@@ -268,17 +280,20 @@ void AutomationEngine::executeClickButton(AutomationJob &job) {
 			}
 		};
 		if (scheduleMs > 0) {
-			base::call_delayed(scheduleMs, action);
+			base::call_delayed(scheduleMs, crl::guard(this, action));
 		} else {
 			action();
 		}
 	}
+	return true;
 }
 
 void AutomationEngine::dismissPopupIfNeeded(const AutomationJob &job) {
 	if (!job.dismissPopup) {
 		return;
 	}
+	// NB: this closes whatever layer is currently open, not specifically the
+	// bot's answer - we have no handle on that one. It is opt-in per job.
 	const auto controller = findSessionController();
 	if (controller) {
 		controller->hideLayer();
