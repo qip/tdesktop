@@ -58,6 +58,7 @@ public:
 	void unloadAll();
 	void clearAll();
 	void editHistoriesMessages(PeerData* peer, bool isHide);
+	void refreshMessageFilters();
 
 	void readInbox(not_null<History*> history);
 	void readInboxTill(not_null<HistoryItem*> item);

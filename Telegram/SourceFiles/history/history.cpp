@@ -3703,6 +3703,16 @@ void History::forceFullResize() {
 	_flags |= Flag::HasPendingResizedItems;
 }
 
+void History::refreshMessageFilters() {
+	for (const auto &message : _items) {
+		MessageFilters::ApplyFilterReplacement(message.get());
+	}
+	// Hidden and dimmed verdicts are cached per view against the filter
+	// revision, but the heights they imply are not - force a relayout.
+	forceFullResize();
+	owner().notifyHistoryChangeDelayed(this);
+}
+
 Data::Thread *History::threadFor(MsgId topicRootId, PeerId monoforumPeerId) {
 	return topicRootId
 		? peer->forumTopicFor(topicRootId)

@@ -1702,21 +1702,23 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 		service->paint(p, context, g, delegate()->elementChatMode());
 	}
 
-	// Check message filters for special display modes
-	const auto filterResult = MessageFilters::CheckMessageAgainstFilters(item);
-	auto filterDimMode = false;
-	if (filterResult.filtered) {
-		if (filterResult.displayMode == MessageFilters::FilterDisplayMode::Hide) {
-			return; // Hide completely
-		} else if (filterResult.displayMode == MessageFilters::FilterDisplayMode::Dim) {
-			// Draw with reduced opacity
-			p.setOpacity(0.3);
-			filterDimMode = true;
-		}
-	}
-
+	// Covers both the group-hidden case and a Hide-mode message filter.
 	if (isHidden()) {
 		return;
+	}
+
+	// Dim-mode filter: draw the whole message at reduced opacity. The guard
+	// restores the painter on every exit path - HistoryInner reuses a single
+	// Painter across all views, so leaking opacity here washes out every
+	// later message in the frame.
+	const auto filterDimMode = filterDimmed();
+	const auto filterOpacityGuard = gsl::finally([&, was = p.opacity()] {
+		if (filterDimMode) {
+			p.setOpacity(was);
+		}
+	});
+	if (filterDimMode) {
+		p.setOpacity(p.opacity() * 0.3);
 	}
 
 	const auto entry = logEntryOriginal();
@@ -2227,11 +2229,6 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			}
 		}
 		p.restore();
-	}
-
-	// Restore opacity if dim mode was applied
-	if (filterDimMode) {
-		p.setOpacity(1.0);
 	}
 
 	if (selectionTranslation) {

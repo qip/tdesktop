@@ -16,10 +16,23 @@ namespace MessageFilters {
 struct FilterResult {
 	bool filtered = false;
 	FilterDisplayMode displayMode = FilterDisplayMode::Hide;
+	// Mode of the filter that produced this verdict. Only meaningful when
+	// `filtered` is true.
+	FilterMode matchedMode = FilterMode::Blacklist;
 };
 
+// Pure query - never touches the item. Safe to call from const paint and
+// geometry paths. Results are only valid for the current FiltersRevision().
 [[nodiscard]] FilterResult CheckMessageAgainstFilters(
 	not_null<HistoryItem*> item);
+
+// Recomputes and stores the Replace-mode text on the item. This is the
+// mutating half, and must only be called from non-const paths.
+void ApplyFilterReplacement(not_null<HistoryItem*> item);
+
+// Bumped whenever the filter set changes. Callers cache per-message verdicts
+// against this value instead of re-running the patterns.
+[[nodiscard]] uint32 FiltersRevision();
 
 [[nodiscard]] bool ShouldSuppressNotification(
 	not_null<HistoryItem*> item);

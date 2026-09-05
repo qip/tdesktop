@@ -175,6 +175,12 @@ void Histories::editHistoriesMessages(PeerData* peer, bool isHide) {
 	}
 }
 
+void Histories::refreshMessageFilters() {
+	for (const auto& [peerId, history] : _map) {
+		history->refreshMessageFilters();
+	}
+}
+
 void Histories::readInbox(not_null<History*> history) {
 	DEBUG_LOG(("Reading: readInbox called."));
 	if (history->lastServerMessageKnown()) {

@@ -18,6 +18,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "boxes/filters/edit_filter_chats_list.h"
 #include "data/data_chat_filters.h"
 #include "data/data_session.h"
+#include "data/data_histories.h"
 #include "data/data_premium_limits.h"
 #include "history/history.h"
 #include "main/main_session.h"
@@ -31,6 +32,18 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "window/window_session_controller.h"
 
 #include <QtCore/QUuid>
+#include <QtCore/QRegularExpression>
+
+namespace {
+
+// Filter verdicts are cached per view against the filter revision, but the
+// heights they imply are not - loaded chats must be re-laid out.
+void RefreshLoadedHistories(
+		not_null<Window::SessionController*> controller) {
+	controller->session().data().histories().refreshMessageFilters();
+}
+
+} // namespace
 
 MessageFilterListBox::MessageFilterListBox(
 	QWidget *parent,
@@ -170,6 +183,7 @@ void MessageFilterListBox::deleteFilter(const QString &filterId) {
 		.text = tr::lng_filter_delete_confirm(tr::now),
 		.confirmed = [=, this](Fn<void()> close) {
 			EnhancedSettings::DeleteMessageFilter(filterId);
+			RefreshLoadedHistories(_controller);
 			refreshList();
 			_list->resizeToWidth(st::boxWidth);
 			const auto height = std::min(600, _list->height() + st::boxPadding.top() + st::boxPadding.bottom());
@@ -212,6 +226,7 @@ void MessageFilterListBox::moveFilter(const QString &filterId, int direction) {
 	
 	// Reorder all filters in the storage
 	EnhancedSettings::ReorderFilters(filterIds);
+	RefreshLoadedHistories(_controller);
 	
 	// Refresh the UI
 	refreshList();
@@ -398,8 +413,13 @@ void MessageFilterEditBox::setInnerFocus() {
 }
 
 void MessageFilterEditBox::save() {
+	const auto pattern = _regex->getLastText();
+	if (!pattern.isEmpty() && !QRegularExpression(pattern).isValid()) {
+		_regex->showError();
+		return;
+	}
 	_filter.name = _name->getLastText();
-	_filter.regex = _regex->getLastText();
+	_filter.regex = pattern;
 	_filter.replacementText = _replacementText->getLastText();
 	_filter.mode = static_cast<MessageFilters::FilterMode>(_modeGroup->current());
 	_filter.displayMode = static_cast<MessageFilters::FilterDisplayMode>(_displayGroup->current());
@@ -416,6 +436,7 @@ void MessageFilterEditBox::save() {
 	} else {
 		EnhancedSettings::UpdateMessageFilter(_filter);
 	}
+	RefreshLoadedHistories(_controller);
 
 	closeBox();
 }

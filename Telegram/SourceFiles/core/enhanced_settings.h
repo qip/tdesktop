@@ -64,6 +64,12 @@ namespace EnhancedSettings {
 
 	// Message filter management
 	[[nodiscard]] QVector<MessageFilters::MessageFilter> GetMessageFilters();
+	// Read-only view of the filter list, without copying it.
+	[[nodiscard]] const QVector<MessageFilters::MessageFilter> &
+		MessageFiltersRef();
+	// Bumped on every change to the filter list. Callers cache derived state
+	// (compiled patterns, per-message verdicts) against this value.
+	[[nodiscard]] uint32 MessageFiltersRevision();
 	void AddMessageFilter(const MessageFilters::MessageFilter &filter);
 	void UpdateMessageFilter(const MessageFilters::MessageFilter &filter);
 	void DeleteMessageFilter(const QString &filterId);
