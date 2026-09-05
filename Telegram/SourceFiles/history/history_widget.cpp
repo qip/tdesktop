@@ -2898,9 +2898,16 @@ void HistoryWidget::showHistory(
 		} else {
 			_chooseForReport = nullptr;
 		}
-		if (_showAtMsgId == ShowAtUnreadMsgId
-			&& !_history->scrollTopItem
-			&& !_history->isEmpty()) {
+		// Unloading makes isReadyFor() false, which forces
+		// firstLoadMessages() and a network round trip on top of rebuilding
+		// every view. Only pay that when there is actually a local reading
+		// position to jump to - otherwise re-opening an already loaded chat
+		// stays instant, as upstream.
+		const auto localReadPosition = (_showAtMsgId == ShowAtUnreadMsgId
+			&& !_history->scrollTopItem)
+			? session().settings().localReadPosition(_peer->id)
+			: MsgId(0);
+		if (localReadPosition && !_history->isEmpty()) {
 			_history->clear(History::ClearType::Unload);
 		}
 		if (_showAtMsgId == ShowAtUnreadMsgId
@@ -2926,11 +2933,8 @@ void HistoryWidget::showHistory(
 		if (_showAtMsgId == ShowAtUnreadMsgId) {
 			if (_history->scrollTopItem) {
 				_showAtMsgId = _history->showAtMsgId;
-			} else if (_history->isEmpty()) {
-				const auto localRead = session().settings().localReadPosition(_peer->id);
-				if (localRead) {
-					_showAtMsgId = localRead;
-				}
+			} else if (localReadPosition && _history->isEmpty()) {
+				_showAtMsgId = localReadPosition;
 			}
 		} else {
 			_history->forgetScrollState();
@@ -4679,7 +4683,11 @@ void HistoryWidget::preloadHistoryIfNeeded() {
 		const auto localRead = settings.localReadPosition(_peer->id);
 		if (localRead) {
 			const auto item = _history->scrollTopItem->data();
-			if (item->isRegular() && item->id > localRead) {
+			// Until the read-till has synced, inboxReadTillId() is 0 and the
+			// comparison below would wipe the bookmark on the first scroll.
+			if (item->isRegular()
+				&& item->id > localRead
+				&& _history->inboxReadTillKnown()) {
 				const auto cloudRead = _history->inboxReadTillId();
 				if (item->id >= cloudRead) {
 					settings.clearLocalReadPosition(_peer->id);
