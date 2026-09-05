@@ -47,9 +47,12 @@ namespace EnhancedSettings {
 
 		void readBlocklist();
 
-		void writing();
-
 		QTimer _jsonWriteTimer;
+
+		// Set when the custom settings file exists but could not be parsed.
+		// While it is set we refuse to write, so a corrupt (or newer) file is
+		// never replaced by the empty in-memory state.
+		bool _customFileBroken = false;
 
 	};
 
