@@ -24,6 +24,7 @@ namespace {
 constexpr auto kLegacyCallsPeerToPeerNobody = 4;
 constexpr auto kVersionTag = -1;
 constexpr auto kVersion = 2;
+constexpr auto kLocalReadPositionsLimit = 10000;
 
 } // namespace
 
@@ -702,7 +703,12 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	if (!stream.atEnd()) {
 		auto count = qint32(0);
 		stream >> count;
-		if (stream.status() == QDataStream::Ok && count >= 0 && count < 10000) {
+		if (stream.status() == QDataStream::Ok && count >= 0) {
+			if (count > kLocalReadPositionsLimit) {
+				LOG(("App Error: "
+					"Too many local read positions (%1), keeping %2."
+					).arg(count).arg(kLocalReadPositionsLimit));
+			}
 			for (auto i = 0; i != count; ++i) {
 				auto peerId = quint64();
 				auto msgId = qint64();
@@ -712,9 +718,13 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 						"Bad data for SessionSettings::addFromSerialized()"));
 					return;
 				}
-				localReadPositions.emplace(
-					DeserializePeerId(peerId),
-					MsgId(msgId));
+				// Always drain the stream, even past the cap, so the rest of
+				// the blob stays readable.
+				if (i < kLocalReadPositionsLimit) {
+					localReadPositions.emplace(
+						DeserializePeerId(peerId),
+						MsgId(msgId));
+				}
 			}
 		}
 	}
@@ -1043,11 +1053,16 @@ MsgId SessionSettings::localReadPosition(PeerId peerId) const {
 }
 
 void SessionSettings::setLocalReadPosition(PeerId peerId, MsgId msgId) {
-	if (msgId) {
-		_localReadPositions[peerId] = msgId;
-	} else {
+	if (!msgId) {
 		_localReadPositions.remove(peerId);
+		return;
+	} else if (_localReadPositions.size() >= size_t(kLocalReadPositionsLimit)
+		&& !_localReadPositions.contains(peerId)) {
+		LOG(("App Error: "
+			"Local read position limit reached, ignoring a new one."));
+		return;
 	}
+	_localReadPositions[peerId] = msgId;
 }
 
 void SessionSettings::clearLocalReadPosition(PeerId peerId) {

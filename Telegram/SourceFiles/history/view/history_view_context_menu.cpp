@@ -1349,8 +1349,10 @@ void AddLocalReadPositionAction(
 		return;
 	}
 	const auto context = list->elementContext();
-	if (context != Context::History
-		&& context != Context::Replies) {
+	// Replies covers forum topics and comment threads, which all share the
+	// parent peer's id. Storing a position from there would overwrite the
+	// chat's own bookmark, and only HistoryWidget ever reads it back.
+	if (context != Context::History) {
 		return;
 	}
 	const auto session = &item->history()->session();
