@@ -260,6 +260,9 @@ bool SponsoredMessages::canHaveFor(not_null<HistoryItem*> item) const {
 }
 
 bool SponsoredMessages::isTopBarFor(not_null<History*> history) const {
+	if (GetEnhancedBool("hide_sponsored")) {
+		return false;
+	}
 	if (peerIsUser(history->peer->id)) {
 		if (const auto user = history->peer->asUser()) {
 			return user->isBot();
