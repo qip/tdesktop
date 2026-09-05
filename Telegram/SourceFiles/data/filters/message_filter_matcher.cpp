@@ -11,6 +11,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "data/data_peer.h"
 #include "data/data_user.h"
 #include "core/enhanced_settings.h"
+#include "logs.h"
 #include "core/application.h"
 #include "main/main_session.h"
 #include "ui/text/text_entity.h"
@@ -140,123 +141,193 @@ TextWithEntities ReplaceTextWithEntities(
 	return result;
 }
 
-} // namespace
+// A filter plus its pattern, compiled once per filter-set revision instead of
+// once per message per paint.
+struct CompiledFilter {
+	MessageFilter filter;
+	QRegularExpression regex;
+	bool regexUsable = false;
+};
 
-FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
-	// Skip service messages - they don't have regular text
-	if (item->isService()) {
-		return { false, FilterDisplayMode::Hide };
+struct CompiledSet {
+	uint32 revision = 0;
+	std::vector<CompiledFilter> entries;
+};
+
+[[nodiscard]] const CompiledSet &Compiled() {
+	static auto cache = CompiledSet();
+	const auto revision = EnhancedSettings::MessageFiltersRevision();
+	if (cache.revision == revision) {
+		return cache;
 	}
-	
-	const auto filters = EnhancedSettings::GetMessageFilters();
-	
-	if (filters.isEmpty()) {
-		item->clearFilterReplacement();
-		return { false, FilterDisplayMode::Hide };
-	}
-	
-	// Sort by order (only if needed)
-	auto sortedFilters = filters;
-	std::sort(sortedFilters.begin(), sortedFilters.end(), [](const auto &a, const auto &b) {
-		return a.order < b.order;
-	});
-
-	const auto chatId = item->history()->peer->id.value;
-
-	for (const auto &filter : sortedFilters) {
+	cache.entries.clear();
+	const auto &filters = EnhancedSettings::MessageFiltersRef();
+	cache.entries.reserve(size_t(filters.size()));
+	for (const auto &filter : filters) {
 		if (!filter.enabled) {
 			continue;
 		}
+		auto entry = CompiledFilter();
+		entry.filter = filter;
+		if (!filter.regex.isEmpty()) {
+			entry.regex = QRegularExpression(filter.regex);
+			entry.regexUsable = entry.regex.isValid();
+			if (entry.regexUsable) {
+				// Pay the JIT cost once, not once per message.
+				entry.regex.optimize();
+			} else {
+				LOG(("Message Filters Error: filter '%1' has an invalid "
+					"pattern, it will be ignored: %2").arg(
+						filter.name,
+						entry.regex.errorString()));
+			}
+		}
+		cache.entries.push_back(std::move(entry));
+	}
+	std::sort(
+		cache.entries.begin(),
+		cache.entries.end(),
+		[](const CompiledFilter &a, const CompiledFilter &b) {
+			return a.filter.order < b.filter.order;
+		});
+	cache.revision = revision;
+	return cache;
+}
 
-		// Check if chat matches (if filter specifies chats)
+struct Evaluation {
+	FilterResult result;
+	bool hasReplacement = false;
+	TextWithEntities replacement;
+};
+
+// Computes the verdict without touching the item. `wantReplacement` controls
+// whether the (much more expensive) Replace-mode text is built as well.
+[[nodiscard]] Evaluation Evaluate(
+		not_null<HistoryItem*> item,
+		bool wantReplacement) {
+	auto evaluation = Evaluation();
+
+	// Skip service messages - they don't have regular text.
+	if (item->isService()) {
+		return evaluation;
+	}
+	const auto &compiled = Compiled();
+	if (compiled.entries.empty()) {
+		return evaluation;
+	}
+	const auto chatId = item->history()->peer->id.value;
+
+	for (const auto &entry : compiled.entries) {
+		const auto &filter = entry.filter;
+
+		// Check if chat matches (if filter specifies chats).
 		if (!filter.chatIds.isEmpty() && !filter.chatIds.contains(chatId)) {
 			continue;
 		}
 
-		// Now check all conditions that must match (AND logic)
-		bool userMatches = true;
-		bool regexMatches = true;
+		// All specified conditions must match (AND logic).
+		auto userMatches = true;
+		auto regexMatches = true;
 
-		// Check if user ID matches (if filter specifies user IDs)
 		if (!filter.userIds.isEmpty()) {
-			userMatches = false; // Default to false if userIds are specified
-			const auto from = item->from();
-			if (from) {
-				const auto userId = from->id.value;
-				if (filter.userIds.contains(userId)) {
-					userMatches = true;
-				}
+			userMatches = false;
+			if (const auto from = item->from()) {
+				userMatches = filter.userIds.contains(from->id.value);
 			}
 		}
 
-		// Check if text matches regex (if filter specifies regex)
-		TextWithEntities replacedTextWithEntities;
+		auto replaced = TextWithEntities();
+		auto haveReplacement = false;
 		if (!filter.regex.isEmpty()) {
 			regexMatches = false;
-			const auto &original = item->originalText();
-			QRegularExpression regex(filter.regex);
-			if (regex.isValid()) {
-				const auto match = regex.match(original.text);
+			if (entry.regexUsable) {
+				const auto &original = item->originalText();
+				const auto match = entry.regex.match(original.text);
 				if (match.hasMatch()) {
 					regexMatches = true;
-					if (filter.mode == FilterMode::Replace) {
-						// Prepare replacement text with entities preserved
-						replacedTextWithEntities = ReplaceTextWithEntities(
+					if (wantReplacement
+						&& filter.mode == FilterMode::Replace) {
+						replaced = ReplaceTextWithEntities(
 							original,
-							regex,
+							entry.regex,
 							filter.replacementText);
+						haveReplacement = !replaced.text.isEmpty();
 					}
 				}
 			}
 		}
 
-		// All specified conditions must match (AND logic)
-		const bool matches = userMatches && regexMatches;
-
-		// Apply filter based on mode
-		if (matches) {
+		if (userMatches && regexMatches) {
 			if (filter.mode == FilterMode::Blacklist) {
-				item->clearFilterReplacement();
-				return { true, filter.displayMode };
+				evaluation.result = {
+					true,
+					filter.displayMode,
+					FilterMode::Blacklist,
+				};
 			} else if (filter.mode == FilterMode::Replace) {
-				// Apply the replacement now that all conditions are confirmed
-				if (!replacedTextWithEntities.text.isEmpty()) {
-					item->setFilterReplacement(std::move(replacedTextWithEntities));
-				}
-				return { false, FilterDisplayMode::Hide };
+				evaluation.result = {
+					false,
+					FilterDisplayMode::Hide,
+					FilterMode::Replace,
+				};
+				evaluation.hasReplacement = haveReplacement;
+				evaluation.replacement = std::move(replaced);
 			} else {
-				// Whitelist: show this message
-				item->clearFilterReplacement();
-				return { false, FilterDisplayMode::Hide };
+				// Whitelist: this message matched, so show it.
+				evaluation.result = {
+					false,
+					FilterDisplayMode::Hide,
+					FilterMode::Whitelist,
+				};
 			}
+			return evaluation;
 		} else if (filter.mode == FilterMode::Whitelist) {
-			// Whitelist: message doesn't match, hide it
-			item->clearFilterReplacement();
-			return { true, FilterDisplayMode::Hide };
+			// Whitelist: message doesn't match, hide it.
+			evaluation.result = {
+				true,
+				FilterDisplayMode::Hide,
+				FilterMode::Whitelist,
+			};
+			return evaluation;
 		}
 	}
+	return evaluation;
+}
 
-	// No filters matched, clear any previous replacement and show the message
-	item->clearFilterReplacement();
-	return { false, FilterDisplayMode::Hide };
+} // namespace
+
+FilterResult CheckMessageAgainstFilters(not_null<HistoryItem*> item) {
+	return Evaluate(item, false).result;
+}
+
+void ApplyFilterReplacement(not_null<HistoryItem*> item) {
+	if (item->isService()) {
+		return;
+	} else if (Compiled().entries.empty()) {
+		item->clearFilterReplacement();
+		return;
+	}
+	auto evaluation = Evaluate(item, true);
+	if (evaluation.hasReplacement) {
+		item->setFilterReplacement(std::move(evaluation.replacement));
+	} else {
+		item->clearFilterReplacement();
+	}
+}
+
+uint32 FiltersRevision() {
+	return EnhancedSettings::MessageFiltersRevision();
 }
 
 bool ShouldSuppressNotification(not_null<HistoryItem*> item) {
+	// Suppress only when a blacklist filter is what hid this message. The
+	// previous version returned true whenever any enabled blacklist filter
+	// existed anywhere, regardless of which filter actually matched.
 	const auto result = CheckMessageAgainstFilters(item);
-	// Suppress notification if message is filtered by a blacklist
-	if (result.filtered) {
-		const auto filters = EnhancedSettings::GetMessageFilters();
-		for (const auto &filter : filters) {
-			if (!filter.enabled) continue;
-			
-			// Quick check if this could be the filter that matched
-			if (filter.mode == FilterMode::Blacklist) {
-				return true;
-			}
-		}
-	}
-	return false;
+	return result.filtered
+		&& (result.matchedMode == FilterMode::Blacklist);
 }
+
 
 } // namespace MessageFilters
 

@@ -484,6 +484,11 @@ public:
 	[[nodiscard]] bool isHiddenByGroup() const;
 	[[nodiscard]] virtual bool isHidden() const;
 
+	// Message-filter verdict, cached against the filter-set revision. These
+	// are called from geometry and paint paths, so they must stay cheap.
+	[[nodiscard]] bool filterHidden() const;
+	[[nodiscard]] bool filterDimmed() const;
+
 	[[nodiscard]] bool isIsolatedEmoji() const {
 		return (_flags & Flag::SpecialOnlyEmoji)
 			&& _text.isIsolatedEmoji();
@@ -820,6 +825,14 @@ private:
 	mutable uint32 _textWidth : 16 = 0;
 	mutable uint32 _textRealWidth : 16 = 0;
 	mutable int _textHeight = 0;
+
+	void refreshFilterCache() const;
+
+	// Cached message-filter verdict. Zero revision means "not computed yet";
+	// EnhancedSettings starts the counter at 1.
+	mutable uint32 _filterRevision = 0;
+	mutable uint32 _filterHidden : 1 = 0;
+	mutable uint32 _filterDimmed : 1 = 0;
 
 	int _y = 0;
 	int _indexInBlock = -1;

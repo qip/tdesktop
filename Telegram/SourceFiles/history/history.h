@@ -289,6 +289,9 @@ public:
 
 	void resizeToWidth(int newWidth);
 	void forceFullResize();
+	// Re-applies message filters to every loaded item and schedules a
+	// relayout. Called when the filter set changes.
+	void refreshMessageFilters();
 	int height() const;
 
 	void itemRemoved(not_null<HistoryItem*> item);

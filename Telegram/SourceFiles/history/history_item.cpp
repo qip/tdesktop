@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_helpers.h"
 #include "history/history_unread_things.h"
 #include "history/history.h"
+#include "data/filters/message_filter_matcher.h"
 #include "iv/iv_data.h"
 #include "iv/iv_rich_page.h"
 #include "mtproto/mtproto_config.h"
@@ -4402,6 +4403,9 @@ void HistoryItem::setTextValue(TextWithEntities text, bool force) {
 	const auto had = !_text.empty();
 	_text = std::move(text);
 	RemoveComponents(HistoryMessageTranslation::Bit());
+	// Recompute the Replace-mode filter text here, where the text actually
+	// changes, instead of lazily from the const paint path.
+	MessageFilters::ApplyFilterReplacement(this);
 	if (had || force) {
 		history()->owner().requestItemTextRefresh(this);
 	}

@@ -1462,8 +1462,10 @@ bool Element::isHidden() const {
 		return true;
 	}
 
-	// Hide messages from blocked users when the setting is enabled
-	if (GetEnhancedBool("blocked_user_spoiler_mode")) {
+	// Hide messages from blocked users when the setting is enabled.
+	// qsl() keeps this from allocating a QString on every call - isHidden()
+	// runs several times per message per frame.
+	if (GetEnhancedBool(qsl("blocked_user_spoiler_mode"))) {
 		const auto item = data();
 		const auto from = item->from();
 		if (from && peerIsUser(from->id)) {
@@ -1475,13 +1477,32 @@ bool Element::isHidden() const {
 		}
 	}
 
-	// Check message filters
-	const auto filterResult = MessageFilters::CheckMessageAgainstFilters(data());
-	if (filterResult.filtered && filterResult.displayMode == MessageFilters::FilterDisplayMode::Hide) {
-		return true;
-	}
+	return filterHidden();
+}
 
-	return false;
+void Element::refreshFilterCache() const {
+	const auto revision = MessageFilters::FiltersRevision();
+	if (_filterRevision == revision) {
+		return;
+	}
+	const auto result = MessageFilters::CheckMessageAgainstFilters(data());
+	const auto hide = result.filtered
+		&& (result.displayMode == MessageFilters::FilterDisplayMode::Hide);
+	const auto dim = result.filtered
+		&& (result.displayMode == MessageFilters::FilterDisplayMode::Dim);
+	_filterHidden = hide ? 1 : 0;
+	_filterDimmed = dim ? 1 : 0;
+	_filterRevision = revision;
+}
+
+bool Element::filterHidden() const {
+	refreshFilterCache();
+	return (_filterHidden != 0);
+}
+
+bool Element::filterDimmed() const {
+	refreshFilterCache();
+	return (_filterDimmed != 0);
 }
 
 void Element::overrideMedia(std::unique_ptr<Media> media) {
@@ -2759,6 +2780,8 @@ void Element::itemDataChanged() {
 }
 
 void Element::itemTextUpdated() {
+	// The text this verdict was computed from is gone.
+	_filterRevision = 0;
 	if (const auto media = _media.get()) {
 		media->parentTextUpdated();
 	}

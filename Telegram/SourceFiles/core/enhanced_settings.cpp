@@ -27,6 +27,8 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 namespace EnhancedSettings {
 	// Global message filters storage
 	QVector<MessageFilters::MessageFilter> gMessageFilters;
+	// Starts at 1 so that 0 can be used as a "never computed" sentinel.
+	uint32 gMessageFiltersRevision = 1;
 	// Global soft mute storage
 	QMap<uint64, SoftMuteState> gSoftMuteSettings;
 	// Global automation jobs storage
@@ -242,6 +244,7 @@ namespace EnhancedSettings {
 
 		// Load message filters
 		ReadArrayOption(settings, "message_filters", [&](const QJsonArray &arr) {
+			++gMessageFiltersRevision;
 			gMessageFilters.clear();
 			gMessageFilters.reserve(arr.size());
 			for (const auto &item : arr) {
@@ -641,8 +644,17 @@ namespace EnhancedSettings {
 		return gMessageFilters;
 	}
 
+	const QVector<MessageFilters::MessageFilter> &MessageFiltersRef() {
+		return gMessageFilters;
+	}
+
+	uint32 MessageFiltersRevision() {
+		return gMessageFiltersRevision;
+	}
+
 	void AddMessageFilter(const MessageFilters::MessageFilter &filter) {
 		gMessageFilters.append(filter);
+		++gMessageFiltersRevision;
 		Write();
 	}
 
@@ -653,6 +665,7 @@ namespace EnhancedSettings {
 				break;
 			}
 		}
+		++gMessageFiltersRevision;
 		Write();
 	}
 
@@ -661,6 +674,7 @@ namespace EnhancedSettings {
 			std::remove_if(gMessageFilters.begin(), gMessageFilters.end(),
 				[&](const auto &f) { return f.id == filterId; }),
 			gMessageFilters.end());
+		++gMessageFiltersRevision;
 		Write();
 	}
 
@@ -677,6 +691,7 @@ namespace EnhancedSettings {
 			}
 		}
 		gMessageFilters = reordered;
+		++gMessageFiltersRevision;
 		Write();
 	}
 
