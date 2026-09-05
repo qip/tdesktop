@@ -58,6 +58,17 @@ cmake-build-debug/
 # Local configuration files
 settings.local.json
 *.local.json
+
+# Local build trees and tooling. /ThirdParty/ above is root-anchored, so it
+# does not cover the vendored copy under Telegram/.
+/build/
+/build-*.log
+/Telegram/ThirdParty/
+/git-filter-repo
+
+# AI assistant session logs and scratch output.
+.specstory/
+.cursorindexingignore
 .env
 .env.local
 .env.*.local
