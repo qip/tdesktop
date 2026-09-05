@@ -269,7 +269,15 @@ bool AutomationEngine::executeClickButton(const AutomationJob &job) {
 			for (int r = 0; r < int(rows.size()); ++r) {
 				for (int c = 0; c < int(rows[r].size()); ++c) {
 					if (idx == resolvedIndex) {
-						Api::SendBotCallbackData(ctrl, item, r, c);
+						const auto owner = &session.data();
+						const auto itemId = item->fullId();
+						Api::SendBotCallbackData(ctrl, item, [=] {
+							return HistoryMessageMarkupButton::Get(
+								owner,
+								itemId,
+								r,
+								c);
+						});
 						if (isLast) {
 							dismissPopupIfNeeded(jobCopy);
 						}
