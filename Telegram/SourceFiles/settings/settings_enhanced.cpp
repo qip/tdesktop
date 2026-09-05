@@ -646,6 +646,9 @@ namespace Settings {
 		}) | rpl::on_next([=](bool enabled) {
 			SetEnhancedValue("unlimited_pins", enabled);
 			EnhancedSettings::Write();
+			// Otherwise the pinned list keeps the old limit until the next
+			// appconfig refresh and silently unpins the oldest chat.
+			controller->session().data().notifyPinnedLimitChanged();
 		}, container->lifetime());
 
 

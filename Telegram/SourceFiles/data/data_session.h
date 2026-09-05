@@ -540,6 +540,9 @@ public:
 		not_null<Forum*> forum) const;
 	[[nodiscard]] rpl::producer<int> maxPinnedChatsLimitValue(
 		not_null<SavedMessages*> saved) const;
+	// The pinned limit is otherwise only re-read on an appconfig refresh,
+	// so toggling "unlimited pins" would not take effect until restart.
+	void notifyPinnedLimitChanged();
 	[[nodiscard]] int groupFreeTranscribeLevel() const;
 	[[nodiscard]] const std::vector<Dialogs::Key> &pinnedChatsOrder(
 		Folder *folder) const;
@@ -1410,7 +1413,16 @@ private:
 	rpl::event_stream<RecentSelfForwards> _recentSelfForwards;
 	rpl::event_stream<RecentJoinChat> _recentJoinChat;
 
+	void restoreLocalPinnedPeers();
+
 	bool _localPinsRestored = false;
+	// Set while we rewrite the pinned list ourselves, so the save handler
+	// does not persist an intermediate state.
+	bool _restoringLocalPins = false;
+	// Saved pins whose History was not loaded yet. Kept so that a chat which
+	// simply is not in memory does not silently lose its pin.
+	QVector<uint64> _unresolvedLocalPins;
+	rpl::event_stream<> _pinnedLimitChanges;
 	rpl::lifetime _lifetime;
 
 };
