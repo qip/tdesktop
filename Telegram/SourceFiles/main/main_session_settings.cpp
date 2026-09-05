@@ -36,17 +36,37 @@ SessionSettings::SessionSettings()
 
 QByteArray SessionSettings::serialize() const {
 	const auto autoDownload = _autoDownload.serialize();
-	auto size = sizeof(qint32) * 4
+	auto size = sizeof(qint32) // kVersionTag
+		+ sizeof(qint32) // kVersion
+		+ sizeof(qint32) // _selectorTab
+		+ sizeof(qint32) // _groupStickersSectionHidden size
 		+ _groupStickersSectionHidden.size() * sizeof(quint64)
-		+ sizeof(qint32) * 4
+		+ sizeof(qint32) // _supportSwitch
+		+ sizeof(qint32) // _supportFixChatsOrder
+		+ sizeof(qint32) // _supportTemplatesAutocomplete
+		+ sizeof(qint32) // _supportChatsTimeSlice
 		+ Serialize::bytearraySize(autoDownload)
-		+ sizeof(qint32) * 11
+		+ sizeof(qint32) // _supportAllSearchResults
+		+ sizeof(qint32) // _archiveCollapsed
+		+ sizeof(qint32) // _archiveInMainMenu
+		+ sizeof(qint32) // old _skipArchiveInSearch
+		+ sizeof(qint32) // old _mediaLastPlaybackPosition size
+		+ sizeof(qint32) // very very old _hiddenPinnedMessages size
+		+ sizeof(qint32) // _dialogsFiltersEnabled
+		+ sizeof(qint32) // _supportAllSilent
+		+ sizeof(qint32) // _photoEditorHintShowsCount
+		+ sizeof(qint32) // very old _hiddenPinnedMessages size
+		+ sizeof(qint32) // _mutePeriods size
 		+ (_mutePeriods.size() * sizeof(quint64))
-		+ sizeof(qint32) * 3
+		+ sizeof(qint32) // old _skipPremiumStickersSet
+		+ sizeof(qint32) // old _hiddenPinnedMessages size
+		+ sizeof(qint32) // _groupEmojiSectionHidden size
 		+ _groupEmojiSectionHidden.size() * sizeof(quint64)
-		+ sizeof(qint32) * 3
+		+ sizeof(qint32) // _lastNonPremiumLimitDownload
+		+ sizeof(qint32) // _lastNonPremiumLimitUpload
+		+ sizeof(qint32) // _hiddenPinnedMessages size
 		+ _hiddenPinnedMessages.size() * (sizeof(quint64) * 4)
-		+ sizeof(qint32)
+		+ sizeof(qint32) // legacy subsection tabs modes count
 		+ sizeof(qint32) // _ringtoneDefaultVolumes size
 		+ (_ringtoneDefaultVolumes.size()
 			* (0
@@ -68,12 +88,16 @@ QByteArray SessionSettings::serialize() const {
 	size += sizeof(qint32); // _setupEmailState
 	size += sizeof(qint32) // _moderateCommonGroups size
 		+ (_moderateCommonGroups.size() * sizeof(qint32));
-	size += sizeof(qint32);
-	size += sizeof(qint32)
+	size += sizeof(qint32); // _disableSharingBoxShowsCount
+	size += sizeof(qint32) // _subsectionTabsModes size
 		+ _subsectionTabsModes.size() * (sizeof(quint64) + sizeof(qint32));
 	size += sizeof(qint32); // _phoneNumberHidden
 	size += sizeof(qint32)
 		+ _localReadPositions.size() * (sizeof(quint64) + sizeof(qint64));
+	size += sizeof(qint32); // _extraFavoriteReactions size
+	for (const auto &id : _extraFavoriteReactions) {
+		size += sizeof(quint64) + Serialize::stringSize(id.emoji());
+	}
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -96,7 +120,7 @@ QByteArray SessionSettings::serialize() const {
 			<< qint32(_supportAllSearchResults.current() ? 1 : 0)
 			<< qint32(_archiveCollapsed.current() ? 1 : 0)
 			<< qint32(_archiveInMainMenu.current() ? 1 : 0)
-			<< qint32(_skipArchiveInSearch.current() ? 1 : 0)
+			<< qint32(0) // old _skipArchiveInSearch
 			<< qint32(0) // old _mediaLastPlaybackPosition.size());
 			<< qint32(0) // very very old _hiddenPinnedMessages.size());
 			<< qint32(_dialogsFiltersEnabled ? 1 : 0)
@@ -166,6 +190,10 @@ QByteArray SessionSettings::serialize() const {
 		for (const auto &[peerId, msgId] : _localReadPositions) {
 			stream << SerializePeerId(peerId) << qint64(msgId.bare);
 		}
+		stream << qint32(_extraFavoriteReactions.size());
+		for (const auto &id : _extraFavoriteReactions) {
+			stream << quint64(id.custom()) << id.emoji();
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -212,7 +240,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	qint32 archiveCollapsed = _archiveCollapsed.current() ? 1 : 0;
 	qint32 appNotifyAboutPinned = app.notifyAboutPinned() ? 1 : 0;
 	qint32 archiveInMainMenu = _archiveInMainMenu.current() ? 1 : 0;
-	qint32 skipArchiveInSearch = _skipArchiveInSearch.current() ? 1 : 0;
+	qint32 skipArchiveInSearch = 0;
 	qint32 legacyAutoplayGifs = 1;
 	qint32 appLoopAnimatedStickers = app.loopAnimatedStickers() ? 1 : 0;
 	qint32 appLargeEmoji = app.largeEmoji() ? 1 : 0;
@@ -242,6 +270,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
 	base::flat_map<PeerId, MsgId> localReadPositions;
+	std::vector<Data::ReactionId> extraFavoriteReactions;
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -728,6 +757,30 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok) {
+			for (auto i = 0; i != count; ++i) {
+				auto custom = quint64();
+				auto emoji = QString();
+				stream >> custom >> emoji;
+				if (stream.status() != QDataStream::Ok) {
+					LOG(("App Error: "
+						"Bad data for SessionSettings::addFromSerialized()"
+						"with extraFavoriteReactions"));
+					return;
+				}
+				if (custom) {
+					extraFavoriteReactions.push_back(
+						Data::ReactionId{ DocumentId(custom) });
+				} else if (!emoji.isEmpty()) {
+					extraFavoriteReactions.push_back(
+						Data::ReactionId{ emoji });
+				}
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -766,7 +819,6 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_supportAllSearchResults = (supportAllSearchResults == 1);
 	_archiveCollapsed = (archiveCollapsed == 1);
 	_archiveInMainMenu = (archiveInMainMenu == 1);
-	_skipArchiveInSearch = (skipArchiveInSearch == 1);
 	_hiddenPinnedMessages = std::move(hiddenPinnedMessages);
 	_dialogsFiltersEnabled = (dialogsFiltersEnabled == 1);
 	_supportAllSilent = (supportAllSilent == 1);
@@ -795,6 +847,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
 	_localReadPositions = std::move(localReadPositions);
+	_extraFavoriteReactions = std::move(extraFavoriteReactions);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);
@@ -890,18 +943,6 @@ bool SessionSettings::archiveInMainMenu() const {
 
 rpl::producer<bool> SessionSettings::archiveInMainMenuChanges() const {
 	return _archiveInMainMenu.changes();
-}
-
-void SessionSettings::setSkipArchiveInSearch(bool skip) {
-	_skipArchiveInSearch = skip;
-}
-
-bool SessionSettings::skipArchiveInSearch() const {
-	return _skipArchiveInSearch.current();
-}
-
-rpl::producer<bool> SessionSettings::skipArchiveInSearchChanges() const {
-	return _skipArchiveInSearch.changes();
 }
 
 MsgId SessionSettings::hiddenPinnedMessageId(
@@ -1046,7 +1087,6 @@ Data::SetupEmailState SessionSettings::setupEmailState() const {
 	return _setupEmailState;
 }
 
-
 MsgId SessionSettings::localReadPosition(PeerId peerId) const {
 	const auto i = _localReadPositions.find(peerId);
 	return (i != end(_localReadPositions)) ? i->second : MsgId(0);
@@ -1067,6 +1107,16 @@ void SessionSettings::setLocalReadPosition(PeerId peerId, MsgId msgId) {
 
 void SessionSettings::clearLocalReadPosition(PeerId peerId) {
 	_localReadPositions.remove(peerId);
+}
+
+void SessionSettings::setExtraFavoriteReactions(
+		std::vector<Data::ReactionId> list) {
+	_extraFavoriteReactions = std::move(list);
+}
+
+auto SessionSettings::extraFavoriteReactions() const
+-> const std::vector<Data::ReactionId> & {
+	return _extraFavoriteReactions;
 }
 
 } // namespace Main
