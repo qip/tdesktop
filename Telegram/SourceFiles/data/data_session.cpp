@@ -94,6 +94,9 @@ namespace {
 
 constexpr auto kNextForUpgradeGiftTimeout = 5 * crl::time(1000);
 constexpr auto kMaxServiceNotificationMessageSize = 4096;
+// Both pinnedChatsLimit() and the MainList limit producer must agree, or
+// PinnedList silently unpins the oldest chat.
+constexpr auto kUnlimitedPinsLimit = 1000;
 
 using ViewElement = HistoryView::Element;
 
@@ -279,46 +282,34 @@ Session::Session(not_null<Main::Session*> session)
 	// Restore local pinned chats order after dialogs are loaded
 	chatsListLoadedEvents(
 	) | rpl::on_next([=](Data::Folder *folder) {
-		if (folder || !GetEnhancedBool("unlimited_pins")) {
+		if (folder) {
 			return;
 		}
-		const auto savedOrder = EnhancedSettings::GetLocalPinnedPeers();
-		if (savedOrder.isEmpty()) {
-			_localPinsRestored = true;
-			return;
-		}
-		const auto list = chatsList(nullptr)->pinned();
-		auto desired = std::vector<Dialogs::Key>();
-		for (const auto &peerId : savedOrder) {
-			if (const auto history = historyLoaded(PeerId(peerId))) {
-				desired.emplace_back(history);
-			}
-		}
-		for (const auto &key : list->order()) {
-			if (!ranges::contains(desired, key)) {
-				desired.emplace_back(key);
-			}
-		}
-		list->clear();
-		for (const auto &key : desired) {
-			list->addPinned(key);
-		}
+		restoreLocalPinnedPeers();
 		_localPinsRestored = true;
-		notifyPinnedDialogsOrderUpdated();
 	}, _lifetime);
 
 	// Save pinned order whenever it changes
 	pinnedDialogsOrderUpdated(
 	) | rpl::on_next([=] {
-		if (!_localPinsRestored || !GetEnhancedBool("unlimited_pins")) {
+		if (_restoringLocalPins
+			|| !_localPinsRestored
+			|| !GetEnhancedBool("unlimited_pins")) {
 			return;
 		}
 		const auto &order = pinnedChatsOrder(nullptr);
 		auto peerIds = QVector<uint64>();
-		peerIds.reserve(order.size());
+		peerIds.reserve(int(order.size()) + _unresolvedLocalPins.size());
 		for (const auto &key : order) {
 			if (const auto history = key.history()) {
 				peerIds.append(history->peer->id.value);
+			}
+		}
+		// Saved pins we could not resolve are appended back, so an unloaded
+		// chat is not dropped from the stored order.
+		for (const auto &peerId : _unresolvedLocalPins) {
+			if (!peerIds.contains(peerId)) {
+				peerIds.append(peerId);
 			}
 		}
 		EnhancedSettings::SetLocalPinnedPeers(peerIds);
@@ -2588,6 +2579,48 @@ void Session::setPinnedFromEntryList(Dialogs::Key key, bool pinned) {
 	}
 }
 
+void Session::restoreLocalPinnedPeers() {
+	if (!GetEnhancedBool("unlimited_pins")) {
+		return;
+	}
+	const auto savedOrder = EnhancedSettings::GetLocalPinnedPeers();
+	if (savedOrder.isEmpty()) {
+		return;
+	}
+	const auto list = chatsList(nullptr)->pinned();
+	auto desired = std::vector<Dialogs::Key>();
+	auto unresolved = QVector<uint64>();
+	for (const auto &peerId : savedOrder) {
+		const auto history = historyLoaded(PeerId(peerId));
+		// PinnedList::addPinned() asserts on folderKnown(); a History built
+		// from a search hit or a forward has no folder yet.
+		if (history && history->folderKnown()) {
+			desired.emplace_back(history);
+		} else {
+			unresolved.append(peerId);
+		}
+	}
+	for (const auto &key : list->order()) {
+		if (!ranges::contains(desired, key)) {
+			desired.emplace_back(key);
+		}
+	}
+	_unresolvedLocalPins = std::move(unresolved);
+
+	_restoringLocalPins = true;
+	list->clear();
+	for (const auto &key : desired) {
+		list->addPinned(key);
+	}
+	_restoringLocalPins = false;
+
+	notifyPinnedDialogsOrderUpdated();
+}
+
+void Session::notifyPinnedLimitChanged() {
+	_pinnedLimitChanges.fire({});
+}
+
 void Session::applyPinnedChats(
 		Data::Folder *folder,
 		const QVector<MTPDialogPeer> &list) {
@@ -2606,6 +2639,12 @@ void Session::applyPinnedChats(
 		});
 	}
 	chatsList(folder)->pinned()->applyList(this, list);
+	if (!folder && _localPinsRestored) {
+		// applyList() starts with clear(), so without this the server's
+		// (non-premium: five) pins would replace the local set and the save
+		// handler below would persist that loss.
+		restoreLocalPinnedPeers();
+	}
 	notifyPinnedDialogsOrderUpdated();
 }
 
@@ -2696,7 +2735,7 @@ bool Session::pinnedCanPin(
 
 int Session::pinnedChatsLimit(Data::Folder *folder) const {
 	if (GetEnhancedBool("unlimited_pins")) {
-		return 1000;
+		return kUnlimitedPinsLimit;
 	}
 	const auto limits = Data::PremiumLimits(_session);
 	return folder
@@ -2728,10 +2767,12 @@ rpl::producer<int> Session::maxPinnedChatsLimitValue(
 	// We always use premium limit in the MainList limit producer,
 	// because it slices the list to that limit. We don't want to slice
 	// premium-ly added chats from the pinned list because of sync issues.
-	return _session->appConfig().value(
+	return rpl::merge(
+		_session->appConfig().value(),
+		_pinnedLimitChanges.events()
 	) | rpl::map([folder, limits = Data::PremiumLimits(_session)] {
 		if (GetEnhancedBool("unlimited_pins")) {
-			return 1000;
+			return kUnlimitedPinsLimit;
 		}
 		return folder
 			? limits.dialogsFolderPinnedPremium()
