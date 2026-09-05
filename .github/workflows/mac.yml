@@ -54,6 +54,13 @@ jobs:
       TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
 
     steps:
+      - name: Check secrets present.
+        run: |
+          if [ -z "$TDESKTOP_API_ID" ] || [ -z "$TDESKTOP_API_HASH" ]; then
+            echo "Missing TDESKTOP_API_ID / TDESKTOP_API_HASH secrets."
+            exit 1
+          fi
+
       - name: Get repository name.
         run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
 

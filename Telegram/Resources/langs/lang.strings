@@ -8496,6 +8496,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_filter_display_hide" = "Hide completely";
 "lng_filter_display_dim" = "Dim message";
 "lng_add_to_message_filter" = "Add to Filter";
+"lng_filter_name_for_user" = "User Filter: {name}";
+"lng_filter_name_for_chat" = "Chat Filter: {name}";
 "lng_filter_global" = "Global (All chats)";
 "lng_filter_enabled" = "Enabled";
 "lng_filter_select_chats" = "Select Chats/Groups/Channels";

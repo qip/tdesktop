@@ -890,7 +890,10 @@ void Filler::addBlockUser() {
 		// Create a new filter with this user
 		MessageFilters::MessageFilter newFilter;
 		newFilter.id = QUuid::createUuid().toString();
-		newFilter.name = "User Filter: " + user->name();
+		newFilter.name = tr::lng_filter_name_for_user(
+			tr::now,
+			lt_name,
+			user->name());
 		newFilter.regex = "";
 		newFilter.userIds.insert(static_cast<int64>(user->id.value));
 		newFilter.mode = MessageFilters::FilterMode::Blacklist;
@@ -960,7 +963,10 @@ void Filler::addAddChatToFilter() {
 		// Create a new filter with this chat/channel
 		MessageFilters::MessageFilter newFilter;
 		newFilter.id = QUuid::createUuid().toString();
-		newFilter.name = "Chat Filter: " + peer->name();
+		newFilter.name = tr::lng_filter_name_for_chat(
+			tr::now,
+			lt_name,
+			peer->name());
 		newFilter.regex = "";
 		newFilter.chatIds.insert(static_cast<int64>(peer->id.value));
 		newFilter.mode = MessageFilters::FilterMode::Blacklist;

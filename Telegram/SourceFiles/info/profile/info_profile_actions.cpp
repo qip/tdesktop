@@ -2943,7 +2943,10 @@ void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 		// Create a new filter with this user
 		MessageFilters::MessageFilter newFilter;
 		newFilter.id = QUuid::createUuid().toString();
-		newFilter.name = "User Filter";
+		newFilter.name = tr::lng_filter_name_for_user(
+			tr::now,
+			lt_name,
+			user->name());
 		newFilter.regex = "";
 		newFilter.userIds.insert(static_cast<int64>(user->id.value));
 		newFilter.mode = MessageFilters::FilterMode::Blacklist;
