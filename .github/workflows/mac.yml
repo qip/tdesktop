@@ -14,6 +14,7 @@ on:
       - 'LICENSE'
       - '.github/**'
       - '!.github/workflows/mac.yml'
+      - '!.github/scripts/**'
       - 'lib/xdg/**'
       - 'snap/**'
       - 'Telegram/build/docker/**'
@@ -31,6 +32,7 @@ on:
       - 'LICENSE'
       - '.github/**'
       - '!.github/workflows/mac.yml'
+      - '!.github/scripts/**'
       - 'lib/xdg/**'
       - 'snap/**'
       - 'Telegram/build/docker/**'
@@ -45,6 +47,9 @@ jobs:
   macos:
     name: MacOS
     runs-on: ${{ (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/nightly') && 'depot-macos-latest' || 'macos-latest' }}
+
+    permissions:
+      contents: write
 
     strategy:
       matrix:
@@ -146,3 +151,15 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.REPO_NAME }}/out/Release/artifact/
           retention-days: 1
+
+      - name: Publish to the rolling dev build.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # -y keeps the symlinks inside the .app bundle intact.
+          cd $REPO_NAME/out/Release/artifact
+          zip -r -y -q $GITHUB_WORKSPACE/Telegram-macos-universal.zip Telegram.app Updater
+          cd $GITHUB_WORKSPACE
+          bash "$REPO_NAME/.github/scripts/publish-dev-build.sh" Telegram-macos-universal.zip
