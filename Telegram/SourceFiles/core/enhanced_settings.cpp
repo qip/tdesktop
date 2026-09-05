@@ -11,6 +11,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "window/window_controller.h"
 #include "core/application.h"
 #include "base/parse_helper.h"
+#include "logs.h"
 #include "facades.h"
 #include "ui/widgets/fields/input_field.h"
 #include "lang/lang_cloud_manager.h"
@@ -18,6 +19,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 #include "data/automation/automation_job.h"
 
 #include <QtCore/QJsonDocument>
+#include <QtCore/QSaveFile>
 #include <QtCore/QJsonObject>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonValue>
@@ -57,8 +59,6 @@ namespace EnhancedSettings {
 			if (error.error != QJsonParseError::NoError || !document.isObject()) {
 				return false;
 			}
-			const auto settings = document.object();
-
 			return true;
 		}
 
@@ -154,10 +154,10 @@ namespace EnhancedSettings {
 	}
 
 	void Manager::write(bool force) {
-		if (force && _jsonWriteTimer.isActive()) {
+		if (force) {
 			_jsonWriteTimer.stop();
-			writeTimeout();
-		} else if (!force && !_jsonWriteTimer.isActive()) {
+			writeCurrentSettings();
+		} else if (!_jsonWriteTimer.isActive()) {
 			_jsonWriteTimer.start(kWriteJsonTimeout);
 		}
 	}
@@ -170,6 +170,9 @@ namespace EnhancedSettings {
 		}
 		cSetEnhancedFirstRun(false);
 		if (!file.open(QIODevice::ReadOnly)) {
+			LOG(("Enhanced Settings Error: could not open '%1' for reading, "
+				"refusing to overwrite it.").arg(CustomFilePath()));
+			_customFileBroken = true;
 			return true;
 		}
 		auto error = QJsonParseError{0, QJsonParseError::NoError};
@@ -179,8 +182,16 @@ namespace EnhancedSettings {
 		file.close();
 
 		if (error.error != QJsonParseError::NoError) {
+			LOG(("Enhanced Settings Error: failed to parse '%1': %2. "
+				"Refusing to overwrite it.").arg(
+					CustomFilePath(),
+					error.errorString()));
+			_customFileBroken = true;
 			return true;
 		} else if (!document.isObject()) {
+			LOG(("Enhanced Settings Error: '%1' is not a JSON object, "
+				"refusing to overwrite it.").arg(CustomFilePath()));
+			_customFileBroken = true;
 			return true;
 		}
 		const auto settings = document.object();
@@ -458,12 +469,18 @@ namespace EnhancedSettings {
 	}
 
 	void Manager::writeCurrentSettings() {
-		auto file = QFile(CustomFilePath());
-		if (!file.open(QIODevice::WriteOnly)) {
+		if (_customFileBroken) {
+			// We never managed to read this file - writing now would replace
+			// the user's filters, soft mutes, jobs and pins with nothing.
 			return;
 		}
-		if (_jsonWriteTimer.isActive()) {
-			writing();
+		// QSaveFile stages to a temporary and commits with an atomic rename,
+		// so an interrupted write leaves the previous file intact.
+		auto file = QSaveFile(CustomFilePath());
+		if (!file.open(QIODevice::WriteOnly)) {
+			LOG(("Enhanced Settings Error: could not open '%1' for writing."
+				).arg(CustomFilePath()));
+			return;
 		}
 		const char *customHeader = R"HEADER(
 // This file was automatically generated from current settings
@@ -589,14 +606,14 @@ namespace EnhancedSettings {
 		auto document = QJsonDocument();
 		document.setObject(settings);
 		file.write(document.toJson(QJsonDocument::Indented));
+		if (!file.commit()) {
+			LOG(("Enhanced Settings Error: could not commit '%1'."
+				).arg(CustomFilePath()));
+		}
 	}
 
 	void Manager::writeTimeout() {
 		writeCurrentSettings();
-	}
-
-	void Manager::writing() {
-		_jsonWriteTimer.stop();
 	}
 
 	void Start() {
@@ -616,6 +633,7 @@ namespace EnhancedSettings {
 		if (!Data) return;
 
 		Data->write(true);
+		Data.reset();
 	}
 
 	// Message filter management
