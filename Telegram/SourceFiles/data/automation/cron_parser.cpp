@@ -22,11 +22,11 @@ constexpr auto kMaxSearchDays = 366 * 4;
 constexpr auto kMaxCachedExpressions = 64;
 
 struct ParsedCron {
-	std::array<bool, 60> minutes = { false };
-	std::array<bool, 24> hours = { false };
-	std::array<bool, 32> daysOfMonth = { false }; // 1..31
-	std::array<bool, 13> months = { false }; // 1..12
-	std::array<bool, 7> daysOfWeek = { false }; // 0..6, 0 = Sunday
+	std::array<bool, 60> minutes = {};
+	std::array<bool, 24> hours = {};
+	std::array<bool, 32> daysOfMonth = {}; // 1..31
+	std::array<bool, 13> months = {}; // 1..12
+	std::array<bool, 7> daysOfWeek = {}; // 0..6, 0 = Sunday
 	// POSIX cron ORs day-of-month with day-of-week when either field is
 	// restricted, so we have to remember whether they were plain "*".
 	bool dayOfMonthRestricted = false;
@@ -102,8 +102,8 @@ bool ParseCron(const QString &expr, ParsedCron &out) {
 	if (!ParseField(fields[2], 1, 31, out.daysOfMonth.data())) return false;
 	if (!ParseField(fields[3], 1, 12, out.months.data())) return false;
 	if (!ParseField(fields[4], 0, 6, out.daysOfWeek.data())) return false;
-	out.dayOfMonthRestricted = (fields[2] != qsl("*"));
-	out.dayOfWeekRestricted = (fields[4] != qsl("*"));
+	out.dayOfMonthRestricted = (fields[2] != "*");
+	out.dayOfWeekRestricted = (fields[4] != "*");
 	return true;
 }
 
