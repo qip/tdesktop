@@ -350,33 +350,26 @@ System::SkipState System::computeSkipState(
 		notifySettings->request(notifyBy);
 	}
 
-	// Check soft mute before regular mute
+	// Check soft mute before regular mute. This is a const query and is
+	// called several times for the same notification (skipNotification,
+	// checkDelayed, showNext), so it must not advance the mute window -
+	// showNext() does that once, when a notification is actually shown.
 	if (messageType) {
 		const auto peerId = thread->peer()->id.value;
-		auto softMute = EnhancedSettings::GetSoftMuteState(peerId);
-		if (softMute.enabled) {
+		const auto softMute = EnhancedSettings::GetSoftMuteState(peerId);
+		// lastNotificationTime == 0 means nothing has been shown yet, so the
+		// first message always gets through.
+		if (softMute.enabled && softMute.lastNotificationTime != 0) {
 			const auto now = base::unixtime::now();
-
-			// If this is the first message (lastNotificationTime == 0), allow it and set timestamp
-			if (softMute.lastNotificationTime == 0) {
-				EnhancedSettings::UpdateSoftMuteLastNotification(peerId, now);
-				// Continue to process normally - allow this first notification
-			} else {
-				const auto elapsed = now - softMute.lastNotificationTime;
-
-				if (elapsed < softMute.period) {
-					// Within soft mute window - suppress based on mode
-					if (softMute.suppressionMode == 0) {
-						// Silent mode: show badge/count but no popup/sound
-						return withSilent(SkipState::DontSkip, true);
-					} else {
-						// Totally hidden mode: skip completely
-						return { SkipState::Skip };
-					}
+			const auto elapsed = now - softMute.lastNotificationTime;
+			if (elapsed < softMute.period) {
+				// Within soft mute window - suppress based on mode
+				if (softMute.suppressionMode == 0) {
+					// Silent mode: show badge/count but no popup/sound
+					return withSilent(SkipState::DontSkip, true);
 				} else {
-					// Past window - allow notification and update timestamp
-					EnhancedSettings::UpdateSoftMuteLastNotification(peerId, now);
-					// Continue to process normally
+					// Totally hidden mode: skip completely
+					return { SkipState::Skip };
 				}
 			}
 		}
@@ -859,6 +852,25 @@ void System::showNext() {
 		const auto notifySilent = computeSkipState(*notify).silent;
 		const auto messageType = (notify->type
 			== Data::ItemNotificationType::Message);
+
+		// Restart the soft mute window from a notification we are actually
+		// showing, and only when it was not itself suppressed.
+		if (messageType) {
+			const auto softMutePeer =
+				notifyItem->notificationThread()->peer()->id.value;
+			const auto softMute
+				= EnhancedSettings::GetSoftMuteState(softMutePeer);
+			if (softMute.enabled) {
+				const auto now = base::unixtime::now();
+				if (!softMute.lastNotificationTime
+					|| (now - softMute.lastNotificationTime
+						>= softMute.period)) {
+					EnhancedSettings::UpdateSoftMuteLastNotification(
+						softMutePeer,
+						now);
+				}
+			}
+		}
 		const auto isForwarded = messageType
 			&& notifyItem->Has<HistoryMessageForwarded>();
 		const auto isAlbum = messageType

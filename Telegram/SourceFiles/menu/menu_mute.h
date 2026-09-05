@@ -35,7 +35,9 @@ struct Descriptor {
 	Fn<void(Data::NotifySound)> updateSound;
 	Fn<void(TimeId)> updateMutePeriod;
 	Data::VolumeController volumeController;
-	Data::Thread *thread = nullptr; // Optional, for soft mute support
+	// Optional, for soft mute support. Weak, because the boxes it feeds
+	// outlive the menu and the thread can be deleted under them.
+	base::weak_ptr<Data::Thread> thread;
 };
 
 [[nodiscard]] Descriptor ThreadDescriptor(not_null<Data::Thread*> thread);
