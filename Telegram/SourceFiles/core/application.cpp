@@ -1005,7 +1005,10 @@ void Application::checkLocalTime() {
 	if (const auto session = maybePrimarySession()) {
 		session->updates().checkLastUpdate(adjusted);
 	}
-	if (adjusted && _automationEngine) {
+	if (_automationEngine) {
+		// Not gated on `adjusted`: RunExpiredOnOpen is meant to fire when the
+		// app is opened or resumed, not only when the wall clock jumps.
+		// checkExpiredIfNeeded() throttles this itself.
 		_automationEngine->checkExpiredIfNeeded();
 	}
 }
