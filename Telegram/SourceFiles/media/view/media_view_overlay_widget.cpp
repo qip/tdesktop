@@ -186,7 +186,10 @@ constexpr auto kFrameStepThrottleMs = crl::time(150);
 
 // macOS OpenGL renderer fails to render larger texture
 // even though it reports that max texture size is 16384.
-constexpr auto kMaxDisplayImageSize = Platform::IsMac() ? 4096 : 16384;
+// A 16384x16384 ARGB image is a single 1 GiB allocation, which a 32-bit
+// build cannot service - keep those on the old cap as well.
+constexpr auto kMaxDisplayImageSize
+	= (Platform::IsMac() || (sizeof(void*) < 8)) ? 4096 : 16384;
 
 // Preload X message ids before and after current.
 constexpr auto kIdsLimit = 48;
