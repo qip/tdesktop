@@ -58,9 +58,9 @@ jobs:
     strategy:
       matrix:
         # Only the published build. Upstream also covers 32-bit, arm64,
-        # Qt 6 and the Ninja generator here.
+        # Qt 5 and the Ninja generator here.
         arch: [x64]
-        qt: [""]
+        qt: [qt6]
         generator: [""]
 
     env:
@@ -264,7 +264,7 @@ jobs:
           github.event_name == 'push'
           && github.ref == 'refs/heads/dev'
           && matrix.arch == 'x64'
-          && matrix.qt == ''
+          && matrix.qt == 'qt6'
           && matrix.generator == ''
         shell: bash
         env:
