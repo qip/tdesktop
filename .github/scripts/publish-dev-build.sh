@@ -27,7 +27,7 @@ fi
 
 NOTES="Automatic build of the latest commit on dev (${GITHUB_SHA:0:7}).
 
-Not a stable release. Windows is a 64-bit build, MacOS is a universal binary.
+Not a stable release. Windows is x64, MacOS is Apple Silicon (arm64) only.
 Both are unsigned, so the system will warn about an unidentified developer."
 
 # The release is shared between the two workflows, so only create it once.

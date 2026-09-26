@@ -101,12 +101,13 @@ jobs:
           path: |
             Libraries
             ThirdParty
-          key: ${{ runner.OS }}-libs-${{ hashFiles(format('{0}/{1}', env.REPO_NAME, env.PREPARE_PATH)) }}
+          # Libraries now include Release builds, don't reuse the Debug-only cache.
+          key: ${{ runner.OS }}-libs-release-${{ hashFiles(format('{0}/{1}', env.REPO_NAME, env.PREPARE_PATH)) }}
           restore-keys: ${{ runner.OS }}-libs-
 
       - name: Libraries.
         run: |
-          ./$REPO_NAME/Telegram/build/prepare/mac.sh skip-release silent
+          ./$REPO_NAME/Telegram/build/prepare/mac.sh silent
 
       - name: Free up some disk space.
         run: find Libraries '(' '(' ! '(' -name '*.a' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -perm +111 ')' -type f ')' -o -empty ')' -delete
@@ -129,6 +130,8 @@ jobs:
           -D CMAKE_CONFIGURATION_TYPES=Release \
           -D CMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+          -D CMAKE_OSX_ARCHITECTURES=arm64 \
+          -D DESKTOP_APP_MAC_ARCH=arm64 \
           -D TDESKTOP_API_ID=$TDESKTOP_API_ID \
           -D TDESKTOP_API_HASH=$TDESKTOP_API_HASH \
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF \
@@ -160,6 +163,6 @@ jobs:
         run: |
           # -y keeps the symlinks inside the .app bundle intact.
           cd $REPO_NAME/out/Release/artifact
-          zip -r -y -q $GITHUB_WORKSPACE/Telegram-macos-universal.zip Telegram.app Updater
+          zip -r -y -q $GITHUB_WORKSPACE/Telegram-macos-arm64.zip Telegram.app Updater
           cd $GITHUB_WORKSPACE
-          bash "$REPO_NAME/.github/scripts/publish-dev-build.sh" Telegram-macos-universal.zip
+          bash "$REPO_NAME/.github/scripts/publish-dev-build.sh" Telegram-macos-arm64.zip

@@ -57,14 +57,11 @@ jobs:
 
     strategy:
       matrix:
-        arch: [x64_x86, x64, arm64]
-        qt: ["", qt6]
-        generator: ["", "Ninja Multi-Config"]
-        exclude:
-          - arch: arm64
-            qt: ""
-          - arch: x64_x86
-            qt: qt6
+        # Only the published build. Upstream also covers 32-bit, arm64,
+        # Qt 6 and the Ninja generator here.
+        arch: [x64]
+        qt: [""]
+        generator: [""]
 
     env:
       UPLOAD_ARTIFACT: "true"
@@ -111,6 +108,8 @@ jobs:
 
           echo "$(sha256sum $TBUILD/$REPO_NAME/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
+          # Libraries now include Release builds, don't reuse the Debug-only cache.
+          echo "with-release" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
           echo "Configurate git for cherry-picks."
@@ -176,7 +175,7 @@ jobs:
 
       - name: Libraries.
         run: |
-          %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent ${{ matrix.qt }}
+          %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat silent ${{ matrix.qt }}
 
       - name: Read configuration matrix.
         shell: bash
@@ -259,8 +258,8 @@ jobs:
           retention-days: 1
 
       - name: Publish to the rolling dev build.
-        # Only the plain x64 Qt5 build is published; the rest of the matrix
-        # stays a CI check.
+        # Guarded on the matrix too, so variants added back later don't
+        # overwrite the published asset.
         if: >-
           github.event_name == 'push'
           && github.ref == 'refs/heads/dev'
