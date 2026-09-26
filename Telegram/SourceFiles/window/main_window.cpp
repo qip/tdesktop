@@ -770,7 +770,7 @@ WindowPosition MainWindow::nextInitialChildPosition(SeparateId childId) {
 	const auto delta = _lastChildIndex
 		? (_lastMyChildCreatePosition - position)
 		: skip;
-	if (qAbs(delta.x()) >= skip.x() || qAbs(delta.y()) >= skip.y()) {
+	if (std::abs(delta.x()) >= skip.x() || std::abs(delta.y()) >= skip.y()) {
 		_lastChildIndex = 1;
 	} else {
 		++_lastChildIndex;
@@ -939,13 +939,14 @@ QRect MainWindow::computeDesktopRect() const {
 }
 
 void MainWindow::savePosition(Qt::WindowState state) {
+	if (!isVisible() || !positionInited()) {
+		return;
+	}
+
 	if (state == Qt::WindowActive) {
 		state = windowHandle()->windowState();
 	}
-
-	if (state == Qt::WindowMinimized
-		|| !isVisible()
-		|| !positionInited()) {
+	if (state == Qt::WindowMinimized) {
 		return;
 	}
 	if (const auto saved = Core::App().savedWindows()) {
