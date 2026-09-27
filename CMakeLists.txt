@@ -44,6 +44,14 @@ if (NOT DESKTOP_APP_USE_PACKAGED AND WIN32)
 endif()
 
 include(cmake/variables.cmake)
+
+# Telegram.pdb alone is ~4 GB and nothing here consumes it, so keep debug
+# information out of the configurations that do not promise any. An empty
+# value also makes common_options link with /DEBUG:NONE, so no .pdb at all
+# is written - Debug and RelWithDebInfo keep theirs.
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
+    "$<$<CONFIG:Debug>:ProgramDatabase>$<$<CONFIG:RelWithDebInfo>:Embedded>")
+
 include(cmake/nice_target_sources.cmake)
 include(cmake/target_compile_options_if_exists.cmake)
 include(cmake/target_link_frameworks.cmake)
