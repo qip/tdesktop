@@ -80,10 +80,21 @@ jobs:
           if "%TDESKTOP_API_ID%"=="" (echo Missing TDESKTOP_API_ID & exit /b 1)
           if "%TDESKTOP_API_HASH%"=="" (echo Missing TDESKTOP_API_HASH & exit /b 1)
 
+      - name: Pick build drive.
+        shell: pwsh
+        run: |
+          # With release sections the dependency build no longer fits in the
+          # free space of C:, so build on the drive with the most room.
+          Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null -and $_.Root -match '^[A-Z]:\\$' } | Format-Table Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}} -AutoSize | Out-String | Write-Host
+          $best = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null -and $_.Root -match '^[A-Z]:\\$' } |
+            Sort-Object Free -Descending | Select-Object -First 1
+          Write-Host "Building on $($best.Root)"
+          Add-Content -Path $env:GITHUB_ENV -Value "TBUILD_ROOT=$($best.Root)TBuild"
+
       - name: Prepare directories.
         run: |
-          mkdir %userprofile%\TBuild\Libraries
-          mklink /d %GITHUB_WORKSPACE%\TBuild %userprofile%\TBuild
+          mkdir %TBUILD_ROOT%\Libraries
+          mklink /d %GITHUB_WORKSPACE%\TBuild %TBUILD_ROOT%
           echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
           echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries${{ matrix.arch == 'x64' && '\win64' || '' }}>>%GITHUB_ENV%
 
@@ -234,6 +245,18 @@ jobs:
       - name: Libraries.
         run: |
           %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat silent ${{ matrix.qt }}
+
+      - name: Disk usage after a failed dependency build.
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null -and $_.Root -match '^[A-Z]:\\$' } | Format-Table Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}} -AutoSize | Out-String | Write-Host
+          Get-ChildItem -Directory $env:LibrariesPath | ForEach-Object {
+            $size = (Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
+              Measure-Object Length -Sum).Sum
+            [pscustomobject]@{ Dir = $_.Name; GB = [math]::Round($size / 1GB, 2) }
+          } | Sort-Object GB -Descending | Select-Object -First 15 |
+            Format-Table -AutoSize | Out-String | Write-Host
 
       - name: Read configuration matrix.
         shell: bash
