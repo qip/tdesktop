@@ -88,7 +88,6 @@ void AutomationEngine::tick() {
 
 void AutomationEngine::checkExpired() {
 	const auto now = QDateTime::currentDateTime();
-	const auto nowUnix = now.toSecsSinceEpoch();
 	const auto jobs = EnhancedSettings::GetAutomationJobs();
 	for (const auto &job : jobs) {
 		if (!job.enabled) {
