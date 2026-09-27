@@ -503,7 +503,9 @@ win:
     bash -c "pacman-key --init; pacman-key --populate; pacman -Syu --noconfirm"
     pacman -Syu --noconfirm ^
         make ^
-        mingw-w64-x86_64-diffutils ^
+        # MSYS2 dropped mingw64 diffutils on 2026-09-27. Only the configure
+        # scripts run under bash --login need diff and cmp, so take the msys one.
+        diffutils ^
         mingw-w64-x86_64-gperf ^
         mingw-w64-x86_64-nasm ^
         mingw-w64-x86_64-perl ^
